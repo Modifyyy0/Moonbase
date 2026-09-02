@@ -20,7 +20,7 @@ CREATE TABLE user_in_conversation (
 	conversation_id int,
 	PRIMARY KEY (user_id, conversation_id),
 	FOREIGN KEY (user_id) REFERENCES users(id),
-	FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+	FOREIGN KEY (conversation_id) REFERENCES conversations(id)
 );
 
 
