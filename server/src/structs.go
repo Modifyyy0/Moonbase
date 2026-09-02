@@ -2,7 +2,8 @@ package src
 
 import "time"
 
-//Adding a private / public, comes from the first letter being capitalized
+// Capitalized first letter = exported (public)
+// lowercase first letter = unexported (private)
 
 type User struct
 {
@@ -15,6 +16,12 @@ type Conversations struct
 	ID int
 	Name string
 	CreatedAt time.Time
+}
+
+type User_in_conversation struct
+{
+	UserID int
+	ConversationID int
 }
 
 type Message struct
