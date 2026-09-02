@@ -2,29 +2,27 @@ CREATE DATABASE IF NOT EXISTS messaging_app;
 
 USE messaging_app;
 
--- =========================
--- Users
--- =========================
-
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE
 );
 
 
--- =========================
--- Conversations
--- =========================
-
 CREATE TABLE conversations (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    name varchar(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 
--- =========================
--- Messages
--- =========================
+CREATE TABLE user_in_conversation (
+	user_id  int,
+	conversation_id int,
+	PRIMARY KEY (user_id, conversation_id),
+	FOREIGN KEY (user_id) REFERENCES user(id),
+	FOREIGN KEY (conversation_id) REFERENCES conversation(id),
+);
+
 
 CREATE TABLE messages (
     id INT AUTO_INCREMENT PRIMARY KEY,
