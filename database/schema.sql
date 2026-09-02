@@ -19,8 +19,8 @@ CREATE TABLE user_in_conversation (
 	user_id  int,
 	conversation_id int,
 	PRIMARY KEY (user_id, conversation_id),
-	FOREIGN KEY (user_id) REFERENCES user(id),
-	FOREIGN KEY (conversation_id) REFERENCES conversation(id),
+	FOREIGN KEY (user_id) REFERENCES users(id),
+	FOREIGN KEY (conversation_id) REFERENCES conversations(id),
 );
 
 
@@ -28,10 +28,10 @@ CREATE TABLE messages (
     id INT AUTO_INCREMENT PRIMARY KEY,
 
     user_id INT NOT NULL,
-    conversation_id INT NOT NULL
+    conversation_id INT NOT NULL,
 
     content varchar(2000),
-    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (user_id)
         REFERENCES users(id),
