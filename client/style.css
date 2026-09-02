@@ -85,7 +85,7 @@ body {
 }
 
 #message-input {
-    width: calc(95% - 20px);
+    width: calc(100% - 40px);
     min-height: 30px;
     field-sizing: content; /* stupid message vertical resizing bullshi*/
     resize: none;
