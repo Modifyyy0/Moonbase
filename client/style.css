@@ -6,19 +6,61 @@
   font-display: swap;
 }
 
-
 * {
     margin: 0;
     padding: 0;
     font-family: "Poppins";
+    color: white;
 }
 
+body {
+    background-color: black;
+}
 
+.date-line div{
+    border-bottom: #4d4d4d 1px solid;
+    width: calc((95% - 200px) / 2);
+}
+
+.date-line p{
+    color: #4d4d4d;
+    font-size: 18px;
+    width: 200px;
+    text-align: center;
+}
+.date-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#message-input-box {
+    width: 100vw;
+    min-height: 50px;
+    display: flex;
+    position: absolute;
+    bottom: 0px;
+    justify-content: center;
+    align-items: center;
+    background-color: black;
+}
+
+#message-input {
+    width: calc(95% - 20px);
+    min-height: 30px;
+    field-sizing: content; /* stupid message vertical resizing bullshi*/
+    resize: none;
+    font-size: 20px;
+    border-radius: 20px;
+    padding-left: 10px;
+    padding-right: 10px;
+    background: none;
+    border: #4d4d4d 2px solid;
+}
 
 .message-box {
     display: flex;
     height: 50px;
-    background-color: black;
 
     color: #A6A6A6;
     align-items: center;
@@ -30,15 +72,22 @@
     margin-right: 15px;
 }
 
-.user {
+.message-box-user {
     font-size: 20px;
     margin-bottom: -5px;
 }
 
-.username {
+.message-box-username {
     color: white;
 }
-.message-content {
+
+.message-box-time{
     font-size: 18px;
+    color: #A6A6A6;
+}
+
+.message-content{
+    font-size: 18px;
+    color: #A6A6A6;
 }
 
