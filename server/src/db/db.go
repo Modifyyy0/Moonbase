@@ -49,3 +49,13 @@ func Connect() error {
     return nil
 }
 
+func Close() {
+	if DB == nil {
+		return
+	}
+
+	if err := DB.Close(); err != nil {
+		fmt.Println("Error closing database:", err)
+	}
+}
+
