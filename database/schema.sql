@@ -19,8 +19,8 @@ CREATE TABLE user_in_conversation (
 	user_id  int,
 	conversation_id int,
 	PRIMARY KEY (user_id, conversation_id),
-	FOREIGN KEY (user_id) REFERENCES users(id),
-	FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+	FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 
 
@@ -34,8 +34,8 @@ CREATE TABLE messages (
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (user_id)
-        REFERENCES users(id),
+        REFERENCES users(id) ON DELETE CASCADE,
 
     FOREIGN KEY (conversation_id)
-        REFERENCES conversations(id)
+        REFERENCES conversations(id) ON DELETE CASCADE
 );
