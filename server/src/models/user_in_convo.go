@@ -1,4 +1,4 @@
-package src
+package models
 
 type User_in_conversation struct
 {
