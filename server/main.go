@@ -14,11 +14,4 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
-
-	user, _ := models.FindUserByName("Darren")
-	err := user.DeleteUser()
-	fmt.Printf("%s\n",err)
-	user, _ = models.FindUserByName("Darren")
-	err = user.DeleteUser()
-	fmt.Printf("%s\n",err)
 }
