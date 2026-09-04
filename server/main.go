@@ -2,66 +2,91 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
 	_ "github.com/go-sql-driver/mysql"
-
-	"encoding/json"
-
-	"Moonbase/src/models"
 )
 
-var db *sql.DB
-
-type user struct {
+type User struct {
 	Name string `json:"name"`
 }
 
-func handleRequest(w http.ResponseWriter, r *http.Request) {
+var db *sql.DB
+
+func main() {
+	var err error
+
+	dsn := "root:12345678@tcp(localhost:3306)/messaging_app"
+
+	db, err = sql.Open("mysql", dsn)
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer db.Close()
+
+	if err = db.Ping(); err != nil {
+		log.Fatalf("Database connection failed: %v", err)
+	}
+
+	http.HandleFunc("/users", handleUsers)
+
+	fmt.Println("Server running at http://localhost:8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func handleUsers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	switch r.Method {
 	case http.MethodGet:
-		getUser(w, r)
+		getUsers(w, r)
 	case http.MethodPost:
 		createUser(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-func getUser(w http.ResponseWriter, r *http.Request) {
+func getUsers(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Query("SELECT username FROM users")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
 
+	var users []User
+
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.Name); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		users = append(users, u)
+	}
+
+	json.NewEncoder(w).Encode(users)
 }
 
 func createUser(w http.ResponseWriter, r *http.Request) {
+	var u User
 
-	var u user
+	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
 
-	err := json.NewDecoder(r.body).Decode(&u)
-
+	query := "INSERT INTO users (username) VALUES (?)"
+	_, err := db.Exec(query, u.Name)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	err = models.CreateUser(u.Name)
-
-}
-
-func main() {
-	var err error
-
-	dsn := "root:12345678@tcp(localhost:3303)/messanging_app"
-
-	db, err = sql.Open("mysql", dsn)
-
-	if err != nil {
-		log.Fatalf("Failed to connect to DB", err)
-		return
-	}
-
-	defer db.Close()
-
-	http.HandleFunc("/users", handleRequest)
-
-	log.Fatal(http.ListenAndServe(":8080", nil))
-
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(u)
 }

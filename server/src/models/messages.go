@@ -1,27 +1,26 @@
 package models
 
 import (
-	"time"
 	"Moonbase/src/db"
+	"time"
 )
 
-type Message struct
-{
-	ID int
-	UserID int
+type Message struct {
+	ID             int
+	UserID         int
 	ConversationID int
-	Content string
-	SentAt time.Time
+	Content        string
+	SentAt         time.Time
 }
 
-func CreateMessage(userID int, conversationID int,content string) error {
+func CreateMessage(userID int, conversationID int, content string) error {
 	_, err := db.DB.Exec(
 		"INSERT INTO messages (user_id, conversation_id, content) VALUES (?, ?, ?)",
 		userID,
 		conversationID,
 		content,
 	)
-	
+
 	return err
 }
 

@@ -4,9 +4,8 @@ import (
 	"Moonbase/src/db"
 )
 
-type UserInConversation  struct
-{
-	UserID int
+type UserInConversation struct {
+	UserID         int
 	ConversationID int
 }
 
@@ -16,23 +15,23 @@ func AddUserToConvo(userID int, conversationID int) error {
 		userID,
 		conversationID,
 	)
-	
+
 	return err
 }
 
 func RemoveUserFromConversation(userID, conversationID int) error {
-    _, err := db.DB.Exec(
-        `DELETE FROM user_in_conversation
+	_, err := db.DB.Exec(
+		`DELETE FROM user_in_conversation
          WHERE user_id = ?
          AND conversation_id = ?`,
-        userID,
-        conversationID,
-    )
+		userID,
+		conversationID,
+	)
 
-    return err
+	return err
 }
 
-func findAllConvoFromUserByID(userID int) ([]Conversation,error){
+func findAllConvoFromUserByID(userID int) ([]Conversation, error) {
 	query := `
 		SELECT c.id, c.name, c.created_at
 		FROM conversations c
@@ -72,7 +71,7 @@ func findAllConvoFromUserByID(userID int) ([]Conversation,error){
 	return convos, nil
 }
 
-func findAllUserFromConvoByID(conversationID int) ([]User,error){
+func findAllUserFromConvoByID(conversationID int) ([]User, error) {
 	query := `
 		SELECT u.id, u.username
 		FROM users u
@@ -110,4 +109,3 @@ func findAllUserFromConvoByID(conversationID int) ([]User,error){
 
 	return users, nil
 }
-
