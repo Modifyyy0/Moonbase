@@ -9,21 +9,54 @@
 </head>
 
 <body>
-    <div id="convo-head">
-        <img id="convo-head-pfp" src="assets/image.png" alt="">
-        <p id="convo-head-name">Lorem Ipsum</p>
-        <div id="convo-head-status">
-            <p id="convo-head-online">3 online</p>
-            <p id="convo-head-members">6 members</p>
+    <div id="view">
+        <div id="side-bar">
+            <div id="new-convo-button">
+                <img id="plus" src="assets/plus-white.svg" alt="">
+                <p id="new-convo-button-text">New Conversation</p>
+            </div>
+
+            <div id="side-bar-list">
+                <div class="side-bar-convo">
+                    <img class="side-bar-convo-pfp" src="assets/image.png" alt="">
+                    <div class="side-bar-convo-text">
+                        <p class="side-bar-convo-name">Lorem Ipsum</p>
+                        <p class="side-bar-convo-members">6 members</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="main-convo">
+            <div id="convo-head">
+                <img id="convo-head-pfp" src="assets/image.png" alt="">
+                <p id="convo-head-name">Lorem Ipsum</p>
+                <div id="convo-head-status">
+                    <p id="convo-head-online">3 online</p>
+                    <p id="convo-head-members">6 members</p>
+                </div>
+            </div>
+            <div id="convo-body">
+                <div id="main-message-area">
+                    <div id="convo-container">
+                    </div>
+                    
+                    <div id="message-input-box">
+                        <textarea id="message-input" type="text" placeholder="Message in “Lorem Ipsum”, [Enter] to send"></textarea>
+                    </div>
+                </div>
+                
+                <div id="info-bar">
+                    <p id="info-bar-online">Online</p>
+                    <div class="info-bar-user">
+                        <img class="info-bar-pfp" src="assets/image.png" alt="">
+                        <p class="info-bar-username">mango</p>
+                    </div>
+                    <p id="info-bar-offline">Offline</p>
+                </div>
+            </div>
         </div>
     </div>
-    <div id="convo-container">
-
-
-    <div id="message-input-box">
-        <textarea id="message-input" type="text" placeholder="Message in “Lorem Ipsum”, [Enter] to send"></textarea>
-    </div>
-
     <script src="script.js"></script>
 </body>
 
