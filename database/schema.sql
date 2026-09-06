@@ -40,8 +40,9 @@ CREATE TABLE messages (
         REFERENCES conversations(id) ON DELETE CASCADE
 );
 
-CREATE TABLE sessions(
-	username VARCHAR(50) not null unique primary key,
+create table sessions(
+	username VARCHAR(50) not null unique,
 	session_token VARCHAR(200),
-	createdAt timestamp
+	createdAt timestamp,
+	FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
 );
