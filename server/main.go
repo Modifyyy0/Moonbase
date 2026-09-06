@@ -42,6 +42,7 @@ func main() {
 
 	http.HandleFunc("/users", handleUsers)
 	http.HandleFunc("/me", handleMe)
+	http.HandleFunc("/logout", LogoutHandler)
 
 	fmt.Println("Server running at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -178,4 +179,46 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"username": username,
 	})
+}
+
+func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	//Logging out means deleting the current session, but i guess first we have to check whos session is that at the moment
+	//And then after verifying the session we delete the session and cookies.
+
+	cookie, err := r.Cookie("session_token")
+
+	if err != nil {
+		if err == http.ErrNoCookie {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	query := "DELETE FROM session where cookie = ?"
+
+	_, err = db.Exec(query, cookie.Value)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	w.Header().Set("content-type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Mogged out successfully",
+	})
+
 }
