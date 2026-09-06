@@ -325,6 +325,49 @@ func delUser(w http.ResponseWriter, r *http.Request) {
 func getConversation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	var userId int
+
+	cookie, err := r.Cookie("session_token")
+
+	if err != nil {
+		http.Error(w, "Unauthorzed bitrh, get away from my screen", http.StatusInternalServerError)
+		return
+	}
+
+	err = db.QueryRow(`SELECT users.id FROM sessions JOIN users ON users.username = sessions.username WHERE sessions.session_token = ?`, cookie.Value).Scan(&userId)
+
+	if err != nil {
+		http.Error(w, "the user id was not obtained from the cookies in the db", http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := db.Query(`SELECT conversations.name FROM user_in_conversation JOIN conversations ON user_in_conversation.conversation_id = conversations.id WHERE user_in_conversation.user_id = ?`, userId)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	defer rows.Close()
+
+	var conversations []string
+
+	for rows.Next() {
+		var name string
+
+		err := rows.Scan(&name)
+		if err != nil {
+			http.Error(w, "aint scan the conversation", http.StatusInternalServerError)
+			return
+
+		}
+
+		conversations = append(conversations, name)
+	}
+
+	// w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(conversations)
+
 }
 
 func CreateConversation(w http.ResponseWriter, r *http.Request) {
