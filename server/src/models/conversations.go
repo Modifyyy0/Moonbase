@@ -1,15 +1,13 @@
 package models
 
 import (
-	"time"
 	"Moonbase/src/db"
-) 
+	"time"
+)
 
-
-type Conversation struct
-{
-	ID int
-	Name string
+type Conversation struct {
+	ID        int
+	Name      string
 	CreatedAt time.Time
 }
 
@@ -31,7 +29,7 @@ func (convo Conversation) DeleteConvo() error {
 	return err
 }
 
-func FindConvoById(id int) (*Conversation,error) {
+func FindConvoById(id int) (*Conversation, error) {
 	convo := &Conversation{}
 
 	query := `
@@ -40,7 +38,7 @@ func FindConvoById(id int) (*Conversation,error) {
 		WHERE id = ?
 	`
 
-	err := db.DB.QueryRow(query, id).Scan(&convo.ID,&convo.Name,&convo.CreatedAt)
+	err := db.DB.QueryRow(query, id).Scan(&convo.ID, &convo.Name, &convo.CreatedAt)
 
 	if err != nil {
 		return nil, err
@@ -49,7 +47,7 @@ func FindConvoById(id int) (*Conversation,error) {
 	return convo, nil
 }
 
-func FindConvoByName(name string) ([]Conversation,error) {
+func FindConvoByName(name string) ([]Conversation, error) {
 	query := `
 		SELECT id, name, created_at
 		FROM conversations

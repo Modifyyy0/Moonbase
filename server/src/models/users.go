@@ -6,9 +6,8 @@ import (
 	"fmt"
 )
 
-type User struct
-{
-	ID int
+type User struct {
+	ID       int
 	Username string
 }
 
@@ -47,7 +46,7 @@ func (user User) DeleteUser() error {
 	return nil
 }
 
-func FindUserByName(name string) (*User, error){
+func FindUserByName(name string) (*User, error) {
 	user := &User{}
 
 	query := `
@@ -56,7 +55,12 @@ func FindUserByName(name string) (*User, error){
 		WHERE username = ?
 	`
 
-	err := db.DB.QueryRow(query,name).Scan(&user.ID,&user.Username)
+	row := db.DB.QueryRow(query, name)
+	if row == nil {
+		return nil, fmt.Errorf("retard")
+	}
+
+	err := row.Scan(&user.ID, &user.Username)
 
 	if err != nil {
 		return nil, err
@@ -66,7 +70,7 @@ func FindUserByName(name string) (*User, error){
 }
 
 func FindUserById(id int) (*User, error) {
-	user:= &User{}
+	user := &User{}
 
 	query := `
 		SELECT id, username
@@ -74,7 +78,7 @@ func FindUserById(id int) (*User, error) {
 		WHERE id = ?
 	`
 
-	err := db.DB.QueryRow(query,id).Scan(&user.ID,&user.Username)
+	err := db.DB.QueryRow(query, id).Scan(&user.ID, &user.Username)
 
 	if err != nil {
 		return nil, err
