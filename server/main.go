@@ -23,6 +23,11 @@ type Session struct {
 	CreatedAt     time.Time
 }
 
+type Conversation struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}
+
 var db *sql.DB
 
 func main() {
@@ -41,9 +46,11 @@ func main() {
 	}
 
 	http.HandleFunc("/users", handleUsers)
+	http.HandleFunc("/newUser", NewUser)
 	http.HandleFunc("/me", handleMe)
 	http.HandleFunc("/logout", LogoutHandler)
 	http.HandleFunc("/del", delUser)
+	http.HandleFunc("/conversations", handleConversations)
 
 	fmt.Println("Server running at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -53,6 +60,17 @@ func generateSessionID() string {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)
 	return base64.RawStdEncoding.EncodeToString(b)
+}
+
+func handleConversations(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		getConversation(w, r)
+	case http.MethodPost:
+		postConversation(w, r)
+	}
 }
 
 func handleUsers(w http.ResponseWriter, r *http.Request) {
@@ -109,22 +127,53 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 // 	json.NewEncoder(w).Encode(u)
 // }
 
+func NewUser(w http.ResponseWriter, r *http.Request) {
+	var u User
+	err := json.NewDecoder(r.Body).Decode(&u)
+
+	if err != nil {
+		http.Error(w, "The user was not created", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Exec("INSERT INTO users (username) VALUES (?)", u.Name)
+
+	if err != nil {
+		http.Error(w, "The user was not stored in the database", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "The user was created and stroed in the db!",
+	})
+
+}
+
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
+
 	var u User
 
 	err := json.NewDecoder(r.Body).Decode(&u)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "The user json was not decoded", http.StatusInternalServerError)
 		return
 	}
 
-	query := "INSERT INTO users (username) VALUES (?)"
+	var UserIn string
 
-	_, err = db.Exec(query, u.Name)
+	query := "SELECT username FROM users WHERE username = ?"
+
+	err = db.QueryRow(query, u.Name).Scan(&UserIn)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if err == sql.ErrNoRows {
+			http.Error(w, "The user doest exist", http.StatusInternalServerError)
+			return
+		}
+
+		http.Error(w, "There is something wrong with checking the user", http.StatusInternalServerError)
 		return
 	}
 
@@ -142,7 +191,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	query = "INSERT INTO session (username, cookie, createdAt) values (?, ?, ?)"
 
-	_, err = db.Exec(query, u.Name, sessionID, time.Now())
+	_, err = db.Exec(query, UserIn, sessionID, time.Now())
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(u)
@@ -271,6 +320,40 @@ func delUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "User was deleted succesfully",
+	})
+
+}
+
+func getConversation(w http.ResponseWriter, r *http.Request) {
+
+}
+
+func postConversation(w http.ResponseWriter, r *http.Request) {
+
+	var conv Conversation
+
+	// cookie, err := r.Cookie("session_token")
+
+	err := json.NewDecoder(r.Body).Decode(&conv)
+	if err != nil {
+		http.Error(w, "The new convo json was not decoded", http.StatusInternalServerError)
+		return
+	}
+
+	// err = models.CreateConvo(conv.Name)
+
+	query := "INSERT INTO conversations (name) VALUES (?)"
+
+	_, err = db.Exec(query, conv.Name)
+
+	if err != nil {
+		http.Error(w, "Something happened in the createConvo in db", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "The new convo was created",
 	})
 
 }
