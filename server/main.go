@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"Moonbase/src/websocket"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -44,6 +45,20 @@ func main() {
 	if err = db.Ping(); err != nil {
 		log.Fatalf("Database connection failed: %v", err)
 	}
+
+    http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+
+        conn, err := websocket.CreateConnection(w, r)
+        if err != nil {
+            log.Println(err)
+            return
+        }
+
+        websocket.ReceiveMsg(conn)
+    })
+
+    log.Fatal(http.ListenAndServe(":8080", nil))
+
 
 	http.HandleFunc("/users", handleUsers)
 	http.HandleFunc("/newUser", NewUser)
