@@ -43,6 +43,7 @@ func main() {
 	http.HandleFunc("/users", handleUsers)
 	http.HandleFunc("/me", handleMe)
 	http.HandleFunc("/logout", LogoutHandler)
+	http.HandleFunc("/del", delUser)
 
 	fmt.Println("Server running at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -219,6 +220,57 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Mogged out successfully",
+	})
+
+}
+
+func delUser(w http.ResponseWriter, r *http.Request) {
+
+	cookie, err := r.Cookie("session_token")
+
+	if err != nil {
+		http.Error(w, "Cookie aint exist", http.StatusUnauthorized)
+		return
+	}
+
+	var usern string
+
+	err = db.QueryRow("SELECT username FROM session WHERE cookie = ?", cookie.Value).Scan(&usern)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	query := "DELETE from users WHERE username = ?"
+
+	_, err = db.Exec(query, usern)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Exec("DELETE FROM session where cookie = ?", cookie.Value)
+
+	if err != nil {
+		http.Error(w, "Cookie not found", http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	w.Header().Set("content-type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "User was deleted succesfully",
 	})
 
 }
