@@ -11,6 +11,8 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"strconv"
 )
 
 type User struct {
@@ -51,6 +53,7 @@ func main() {
 	http.HandleFunc("/logout", LogoutHandler)
 	http.HandleFunc("/del", delUser)
 	http.HandleFunc("/conversations", handleConversations)
+	http.HandleFunc("/joinConvo/{convoID}", JoinConvo)
 
 	fmt.Println("Server running at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -245,7 +248,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "DELETE FROM sessions where cookie = ?"
+	query := "DELETE FROM sessions where session_token = ?"
 
 	_, err = db.Exec(query, cookie.Value)
 
@@ -437,8 +440,33 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 
 func JoinConvo(w http.ResponseWriter, r *http.Request) {
 
-}
+	var userId int
 
-func UserInConversation(w http.ResponseWriter, r *http.Request) {
+	convoID, err := strconv.Atoi(r.PathValue("convoID"))
+
+	if err != nil {
+		http.Error(w, "Invalid convID", http.StatusInternalServerError)
+		return
+	}
+	cookie, err := r.Cookie("session_token")
+
+	err = db.QueryRow(`SELECT users.id FROM sessions JOIN users ON users.username = sessions.username WHERE sessions.session_token = ?`, cookie.Value).Scan(&userId)
+
+	if err != nil {
+		http.Error(w, "the user id was not obtained from the cookies in the db", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Exec("INSERT into user_in_conversation (user_id, conversation_id) VALUES (?, ?)", userId, convoID)
+
+	if err != nil {
+		http.Error(w, "something happend while inserting data into 'user_in_conversation' table", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "The user was added to the conversation",
+	})
 
 }
