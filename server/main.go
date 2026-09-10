@@ -67,6 +67,7 @@ func main() {
 	http.HandleFunc("/conversations", handleConversations)
 	http.HandleFunc("/convoInfo/{convoID}", convoInfo)
 	http.HandleFunc("/joinConvo/{convoID}", JoinConvo)
+	http.HandleFunc("/conversations/{convoID}/members/leave", leaveConvo)
 
 	fmt.Println("Server running at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -556,5 +557,38 @@ func convoInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(conversation)
+
+}
+
+func leaveConvo(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("session_token")
+
+	convoId, err := strconv.Atoi(r.PathValue("convoID"))
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var userId int
+
+	err = db.QueryRow(`SELECT users.id FROM sessions JOIN users ON sessions.username = users.username WHERE sessions.session_token = ?`, cookie.Value).Scan(&userId)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Exec(`DELETE FROM user_in_conversation WHERE conversation_id = ? AND user_id = ?`, convoId, userId)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "User was deleted from the convo",
+	})
 
 }
