@@ -30,6 +30,18 @@ type Conversation struct {
 	Name string `json:"name"`
 }
 
+type Member struct {
+	ID       int    `json:"id"`
+	Username string `json:"username"`
+	Online   bool   `json:"online"`
+}
+
+type ConversationDetails struct {
+	ID      int      `json:"id"`
+	Name    string   `json:"name"`
+	Members []Member `json:"members"`
+}
+
 var db *sql.DB
 
 func main() {
@@ -53,6 +65,7 @@ func main() {
 	http.HandleFunc("/logout", LogoutHandler)
 	http.HandleFunc("/del", delUser)
 	http.HandleFunc("/conversations", handleConversations)
+	http.HandleFunc("/convoInfo/{convoID}", convoInfo)
 	http.HandleFunc("/joinConvo/{convoID}", JoinConvo)
 
 	fmt.Println("Server running at http://localhost:8080")
@@ -70,7 +83,7 @@ func handleConversations(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		getConversation(w, r)
+		getUserConversation(w, r)
 	case http.MethodPost:
 		CreateConversation(w, r)
 	}
@@ -325,7 +338,7 @@ func delUser(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func getConversation(w http.ResponseWriter, r *http.Request) {
+func getUserConversation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var userId int
@@ -468,5 +481,80 @@ func JoinConvo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "The user was added to the conversation",
 	})
+
+}
+
+func convoInfo(w http.ResponseWriter, r *http.Request) {
+
+	w.Header().Set("Content-Type", "application/json")
+
+	conversationID, err := strconv.Atoi(r.PathValue("convoID"))
+	if err != nil {
+		http.Error(w, "Invalid conversation ID", http.StatusBadRequest)
+		return
+	}
+
+	var conversation ConversationDetails
+
+	err = db.QueryRow(
+		"SELECT id, name FROM conversations WHERE id = ?",
+		conversationID,
+	).Scan(&conversation.ID, &conversation.Name)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Conversation not found", http.StatusNotFound)
+			return
+		}
+
+		http.Error(w, "Could not obtain conversation", http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := db.Query(`
+        SELECT
+            users.id,
+            users.username,
+            EXISTS(
+                SELECT 1
+                FROM sessions
+                WHERE sessions.username = users.username
+            ) AS online
+        FROM user_in_conversation
+        JOIN users
+            ON user_in_conversation.user_id = users.id
+        WHERE user_in_conversation.conversation_id = ?
+    `, conversationID)
+
+	if err != nil {
+		http.Error(w, "Could not obtain conversation members", http.StatusInternalServerError)
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var member Member
+
+		err := rows.Scan(
+			&member.ID,
+			&member.Username,
+			&member.Online,
+		)
+
+		if err != nil {
+			http.Error(w, "Could not scan member", http.StatusInternalServerError)
+			return
+		}
+
+		conversation.Members = append(conversation.Members, member)
+	}
+
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Error while reading members", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(conversation)
 
 }
