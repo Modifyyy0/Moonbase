@@ -41,7 +41,7 @@ CREATE TABLE messages (
 );
 
 create table sessions(
-	username VARCHAR(50) not null unique,
+	username VARCHAR(50) not null,
 	session_token VARCHAR(200),
 	createdAt timestamp,
 	FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE

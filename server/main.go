@@ -22,15 +22,17 @@ func main() {
 	defer db.Close()
 
 	http.HandleFunc("POST /login", handlers.LoginHandler)
-	http.HandleFunc("POST /newUser", handlers.NewUser)
-	http.HandleFunc("GET /me", handlers.HandleMe)
 	http.HandleFunc("POST /logout", handlers.LogoutHandler)
-	http.HandleFunc("DELETE /del", handlers.DeleteUser)
+	http.HandleFunc("GET /me", handlers.HandleMe)
 
 	http.HandleFunc("/conversations", handlers.HandleConversations)
-	http.HandleFunc("GET /convoInfo/{convoID}", handlers.ConvoInfo)
-	http.HandleFunc("POST /joinConvo/{convoID}", handlers.JoinConvo)
-	http.HandleFunc("DELETE /conversations/{convoID}/members/leave", handlers.LeaveConvo)
+	http.HandleFunc("GET /conversations/{convoID}", handlers.ConvoInfo)
+	http.HandleFunc("DELETE /conversations/{convoID}/members/me", handlers.LeaveConvo)
+	http.HandleFunc("GET /conversations/{convoID}/messages", handlers.GetMessages)
+	http.HandleFunc("POST /join/{convoID}", handlers.JoinConvo)
+
+	http.HandleFunc("POST /newUser", handlers.NewUser)
+	http.HandleFunc("DELETE /deleteUser", handlers.DeleteUser)
 
 	fmt.Println("Server running at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
