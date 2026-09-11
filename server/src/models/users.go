@@ -7,8 +7,8 @@ import (
 )
 
 type User struct {
-	ID       int
-	Username string
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 func CreateUser(name string) error {
@@ -60,7 +60,7 @@ func FindUserByName(name string) (*User, error) {
 		return nil, fmt.Errorf("retard")
 	}
 
-	err := row.Scan(&user.ID, &user.Username)
+	err := row.Scan(&user.ID, &user.Name)
 
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func FindUserById(id int) (*User, error) {
 		WHERE id = ?
 	`
 
-	err := db.DB.QueryRow(query, id).Scan(&user.ID, &user.Username)
+	err := db.DB.QueryRow(query, id).Scan(&user.ID, &user.Name)
 
 	if err != nil {
 		return nil, err

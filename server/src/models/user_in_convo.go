@@ -93,7 +93,7 @@ func findAllUserFromConvoByID(conversationID int) ([]User, error) {
 
 		err := rows.Scan(
 			&user.ID,
-			&user.Username,
+			&user.Name,
 		)
 
 		if err != nil {
