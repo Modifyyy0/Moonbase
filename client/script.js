@@ -1,12 +1,25 @@
+import { rest } from "./rest.js";
+import { ChatWebSocket } from "./ws.js";
 const messageInput = document.getElementById("message-input")
 const convoContainer = document.getElementById("convo-container")
+const ws = new ChatWebSocket();
 
+let current_conversation_id = 12
+
+document.addEventListener("DOMContentLoaded", () => {
+    ws.connect()
+})
 
 messageInput.addEventListener("keydown", (event) => {
     if (event.key == "Enter" && !event.ctrlKey) {
         console.log("hmm")
         event.preventDefault()
         const content = messageInput.value.trim()
+
+        if (content === "") {
+            return
+        }
+
         sendMessage("mango", "1:21", content)
         messageInput.value = ""
     }
@@ -18,6 +31,15 @@ messageInput.addEventListener("keydown", (event) => {
 
 const sendMessage = (user, time, content) => {
     convoContainer.appendChild(messageBox(user, time, content))
+    
+    const data = {
+        "type": "send_message",
+        "data": {
+            "conversation_id": current_conversation_id,
+            "content": content
+        }
+    }
+    socket.send(JSON.stringify(data))
 }
 
 const messageBox = (user, time, content) => {
