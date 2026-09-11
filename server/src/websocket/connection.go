@@ -9,23 +9,29 @@ import (
 
 var upgrader = websocket.Upgrader{}
 
-func CreateConnection(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
+func CreateConnection(w http.ResponseWriter, r *http.Request) (*websocket.Conn, *models.User, error) {
 
-	cookie, err := r.Cookie("session_token")
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = models.FindSessionByToken(cookie.Value)
-	if err != nil {
-        return nil, err
+    cookie, err := r.Cookie("session_token")
+    if err != nil {
+        return nil, nil, err
     }
 
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-        return nil, err
+    session, err := models.FindSessionByToken(cookie.Value)
+    if err != nil {
+        return nil, nil, err
     }
-	
-	log.Println("WebSocket connection established")
-	return conn, nil
+
+    user, err := models.FindUserByName(session.Username)
+    if err != nil {
+        return nil, nil, err
+    }
+
+    conn, err := upgrader.Upgrade(w, r, nil)
+    if err != nil {
+        return nil, nil, err
+    }
+
+    log.Println("WebSocket connection established")
+
+    return conn, user, nil
 }
