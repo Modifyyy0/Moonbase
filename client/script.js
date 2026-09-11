@@ -74,3 +74,22 @@ const dateLine = (date) => {
     template.querySelector("p").textContent = date;
     return template.querySelector("date-line")
 }
+
+const memberButton = document.getElementById("info-bar-select-members")
+const infoButton = document.getElementById("info-bar-select-info")
+const infoBarMembers = document.getElementById("info-bar-members")
+const infoBarInfo = document.getElementById("info-bar-info")
+
+memberButton.addEventListener("click", () => {
+    infoBarMembers.style = "display: block"
+    infoBarInfo.style = "display: none"
+    memberButton.classList.add("info-bar-select-selected")
+    infoButton.classList.remove("info-bar-select-selected")
+})
+
+infoButton.addEventListener("click", () => {
+    infoBarMembers.style = "display: none"
+    infoBarInfo.style = "display: flex"
+    infoButton.classList.add("info-bar-select-selected")
+    memberButton.classList.remove("info-bar-select-selected")
+})

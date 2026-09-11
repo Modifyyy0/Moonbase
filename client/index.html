@@ -5,25 +5,84 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_circle" />
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <div id="convo-head">
-        <img id="convo-head-pfp" src="assets/image.png" alt="">
-        <p id="convo-head-name">Lorem Ipsum</p>
-        <div id="convo-head-status">
-            <p id="convo-head-online">3 online</p>
-            <p id="convo-head-members">6 members</p>
+    <div id="view">
+        <div id="side-bar">
+            <div id="new-convo-button">
+                <span class="material-symbols-outlined" id="plus-white">add_circle</span>
+                <p id="new-convo-button-text">New Conversation</p>
+            </div>
+
+            <div id="side-bar-list">
+                <div class="side-bar-convo">
+                    <img class="side-bar-convo-pfp" src="assets/image.png" alt="">
+                    <div class="side-bar-convo-text">
+                        <p class="side-bar-convo-name">Lorem Ipsum</p>
+                        <p class="side-bar-convo-members">6 members</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="main-convo">
+            <div id="convo-head">
+                <img id="convo-head-pfp" src="assets/image.png" alt="">
+                <p id="convo-head-name">Lorem Ipsum</p>
+                <div id="convo-head-status">
+                    <p id="convo-head-online">3 online</p>
+                    <p id="convo-head-members">6 members</p>
+                </div>
+            </div>
+            <div id="convo-body">
+                <div id="main-message-area">
+                    <div id="convo-container">
+                    </div>
+                    
+                    <div id="message-input-box">
+                        <textarea id="message-input" type="text" placeholder="Message in “Lorem Ipsum”, [Enter] to send"></textarea>
+                    </div>
+                </div>
+                
+                <div id="info-bar">
+                    <div id="info-bar-select">
+                        <p id="info-bar-select-members">Members</p>
+                        <p id="info-bar-select-info">Info</p>
+                    </div>
+
+                    <div id="info-bar-members">
+                        <p id="info-bar-online">Online</p>
+                        <div class="info-bar-user">
+                            <img class="info-bar-pfp" src="assets/image.png" alt="">
+                            <p class="info-bar-username">mango</p>
+                        </div>
+                        <p id="info-bar-offline">Offline</p>
+                    </div>
+
+                    <div id="info-bar-info">
+                        <img id="info-bar-convo-pfp" src="assets/image.png" alt="">
+                        <p id="info-bar-convo-name">Lorem Ipsum</p>
+                        <p id="info-bar-convo-creation">Created on</p>
+                        <p id="creation-date">Sept. 11, 2027</p>
+                        <p id="info-bar-convo-join">Joined on</p>
+                        <p id="join-date">Sept. 21, 2027</p>
+                            <p id="invite-box">
+                                Invite Others
+                            </p>
+
+
+                            <p id="leave-box">
+                                Leave Conversation
+                            </p>
+
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    <div id="convo-container">
-
-
-    <div id="message-input-box">
-        <textarea id="message-input" type="text" placeholder="Message in “Lorem Ipsum”, [Enter] to send"></textarea>
-    </div>
-
     <script src="script.js" type="module"></script>
     <script src="rest.js" type="module"></script>
     <script src="ws.js" type="module"></script>
