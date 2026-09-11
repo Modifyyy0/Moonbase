@@ -10,9 +10,10 @@ message = {
     "type": "send_message",
     "data": {
         "conversation_id": 31,
-        "content": "absolutely gay!"
+        "content": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     }
 }
+
 while True:
     ws.send(json.dumps(message))
 
