@@ -25,12 +25,13 @@ func Connect() error {
 	dbName := os.Getenv("DB_NAME")
 
 	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s",
+		"%s:%s@tcp(%s:%s)/%s?%s",
 		user,
 		password,
 		host,
 		port,
 		dbName,
+		"parseTime=true",
 	)
 
 	DB, err = sql.Open("mysql", dsn)

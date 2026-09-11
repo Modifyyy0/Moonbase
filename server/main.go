@@ -1,6 +1,9 @@
 package main
 
 import (
+	"Moonbase/src/models"
+	"Moonbase/src/websocket"
+	"Moonbase/src/db"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -9,7 +12,6 @@ import (
 	"log"
 	"net/http"
 	"time"
-	"Moonbase/src/websocket"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -29,36 +31,16 @@ type Conversation struct {
 	Name string `json:"name"`
 }
 
-var db *sql.DB
-
 func main() {
-	var err error
+	err := db.Connect()
 
-	dsn := "root:12345678@tcp(localhost:3306)/messaging_app"
-
-	db, err = sql.Open("mysql", dsn)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		log.Printf("Could not connect to the database: %v", err)
+		return
 	}
 	defer db.Close()
 
-	if err = db.Ping(); err != nil {
-		log.Fatalf("Database connection failed: %v", err)
-	}
-
-    http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-
-        conn, err := websocket.CreateConnection(w, r)
-        if err != nil {
-            log.Println(err)
-            return
-        }
-
-        websocket.ReceiveMsg(conn)
-    })
-
-    log.Fatal(http.ListenAndServe(":8080", nil))
-
+	http.HandleFunc("/ws", createWebSocket)
 
 	http.HandleFunc("/users", handleUsers)
 	http.HandleFunc("/newUser", NewUser)
@@ -69,6 +51,35 @@ func main() {
 
 	fmt.Println("Server running at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func createWebSocket(w http.ResponseWriter, r *http.Request) {
+
+	conn, err := websocket.CreateConnection(w, r)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	go websocket.ReceiveMsg(conn)
+	//type your input right now
+	//and make a go websocket.SendMsg(Conn)
+	go func() {
+        for {
+            msg, err := models.FindMessageByID(1)
+            if err != nil {
+                log.Println(err)
+                return
+            }
+
+            err = websocket.SendMsg(conn, msg)
+            if err != nil {
+                log.Println(err)
+                return
+            }
+
+            time.Sleep(time.Second)
+        }
+    }()
 }
 
 func generateSessionID() string {
@@ -102,7 +113,7 @@ func handleUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func getUsers(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT username FROM users")
+	rows, err := db.DB.Query("SELECT username FROM users")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -132,7 +143,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 // 	}
 
 // 	query := "INSERT INTO users (username) VALUES (?)"
-// 	_, err := db.Exec(query, u.Name)
+// 	_, err := db.DB.Exec(query, u.Name)
 // 	if err != nil {
 // 		http.Error(w, err.Error(), http.StatusInternalServerError)
 // 		return
@@ -151,7 +162,7 @@ func NewUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Exec("INSERT INTO users (username) VALUES (?)", u.Name)
+	_, err = db.DB.Exec("INSERT INTO users (username) VALUES (?)", u.Name)
 
 	if err != nil {
 		http.Error(w, "The user was not stored in the database", http.StatusInternalServerError)
@@ -180,7 +191,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	query := "SELECT username FROM users WHERE username = ?"
 
-	err = db.QueryRow(query, u.Name).Scan(&UserIn)
+	err = db.DB.QueryRow(query, u.Name).Scan(&UserIn)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -206,7 +217,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	query = "INSERT INTO session (username, cookie, createdAt) values (?, ?, ?)"
 
-	_, err = db.Exec(query, UserIn, sessionID, time.Now())
+	_, err = db.DB.Exec(query, UserIn, sessionID, time.Now())
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(u)
@@ -228,7 +239,7 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 
 	query := "SELECT username FROM session WHERE cookie = ?"
 
-	err = db.QueryRow(query, cookie.Value).Scan(&username)
+	err = db.DB.QueryRow(query, cookie.Value).Scan(&username)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -264,7 +275,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 	query := "DELETE FROM session where cookie = ?"
 
-	_, err = db.Exec(query, cookie.Value)
+	_, err = db.DB.Exec(query, cookie.Value)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -299,7 +310,7 @@ func delUser(w http.ResponseWriter, r *http.Request) {
 
 	var usern string
 
-	err = db.QueryRow("SELECT username FROM session WHERE cookie = ?", cookie.Value).Scan(&usern)
+	err = db.DB.QueryRow("SELECT username FROM session WHERE cookie = ?", cookie.Value).Scan(&usern)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -308,14 +319,14 @@ func delUser(w http.ResponseWriter, r *http.Request) {
 
 	query := "DELETE from users WHERE username = ?"
 
-	_, err = db.Exec(query, usern)
+	_, err = db.DB.Exec(query, usern)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	_, err = db.Exec("DELETE FROM session where cookie = ?", cookie.Value)
+	_, err = db.DB.Exec("DELETE FROM session where cookie = ?", cookie.Value)
 
 	if err != nil {
 		http.Error(w, "Cookie not found", http.StatusInternalServerError)
@@ -359,7 +370,7 @@ func postConversation(w http.ResponseWriter, r *http.Request) {
 
 	query := "INSERT INTO conversations (name) VALUES (?)"
 
-	_, err = db.Exec(query, conv.Name)
+	_, err = db.DB.Exec(query, conv.Name)
 
 	if err != nil {
 		http.Error(w, "Something happened in the createConvo in db", http.StatusInternalServerError)
