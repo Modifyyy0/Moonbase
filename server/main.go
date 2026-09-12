@@ -31,6 +31,8 @@ type Conversation struct {
 	Name string `json:"name"`
 }
 
+var manager = websocket.NewConnectionManager()
+
 func main() {
 	err := db.Connect()
 
@@ -40,7 +42,7 @@ func main() {
 	}
 	defer db.Close()
 
-	http.HandleFunc("/ws", createWebSocket)
+	http.HandleFunc("/ws", handleWebsocket)
 
 	http.HandleFunc("/users", handleUsers)
 	http.HandleFunc("/newUser", NewUser)
@@ -53,33 +55,25 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func createWebSocket(w http.ResponseWriter, r *http.Request) {
+func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 
-	conn, err := websocket.CreateConnection(w, r)
+	conn, user, err := websocket.CreateConnection(w, r)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	go websocket.ReceiveMsg(conn)
-	//type your input right now
-	//and make a go websocket.SendMsg(Conn)
-	go func() {
-        for {
-            msg, err := models.FindMessageByID(1)
-            if err != nil {
-                log.Println(err)
-                return
-            }
 
-            err = websocket.SendMsg(conn, msg)
-            if err != nil {
-                log.Println(err)
-                return
-            }
+	client := &websocket.Client{
+		UserID:  user.ID,
+		Conn:    conn,
+		Message: make(chan *models.Message, 16),
+		Done:    make(chan struct{}),
+	}
 
-            time.Sleep(time.Second)
-        }
-    }()
+	manager.AddClient(client)
+	
+	go websocket.WritePump(client)
+	go websocket.ReadPump(client, manager)
 }
 
 func generateSessionID() string {

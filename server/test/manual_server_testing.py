@@ -9,13 +9,13 @@ ws = websocket.create_connection(
 message = {
     "type": "send_message",
     "data": {
-        "conversation_id": 31,
+        "conversation_id": 1,
         "content": "absolutely gay!"
     }
 }
-while True:
-    ws.send(json.dumps(message))
 
-    print(ws.recv())
+ws.send(json.dumps(message))
+
+print(ws.recv())
 
 ws.close()
