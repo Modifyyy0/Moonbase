@@ -526,7 +526,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border: white solid 2px;
+    background-color: black;
     padding: 0px 20px;
 }
 
