@@ -74,65 +74,60 @@ func getUserConversation(w http.ResponseWriter, r *http.Request) {
 
 func CreateConversation(w http.ResponseWriter, r *http.Request) {
 
-	var conv models.Conversation
+	var req models.CreateConversationRequest
 
-	cookie, err := r.Cookie("session_token")
+	err := json.NewDecoder(r.Body).Decode(&req)
 
 	if err != nil {
-		if err == http.ErrNoCookie {
-			http.Error(w, "Unauthorised", http.StatusUnauthorized)
-			return
-		}
-		http.Error(w, "Bitch no cookie to you", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	err = json.NewDecoder(r.Body).Decode(&conv)
+	result, err := db.Exec(`INSERT INTO conversations(name) VALUES (?)`, req.Name)
+
 	if err != nil {
-		http.Error(w, "The new convo json was not decoded", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// err = models.CreateConvo(conv.Name)
-
-	result, err := db.Exec("INSERT INTO conversations (name) VALUES (?)", conv.Name)
+	conversationId, err := result.LastInsertId()
 
 	if err != nil {
-		http.Error(w, "Something happened while inserting into 'conversations' table in db", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	conversationID, err := result.LastInsertId()
+	for _, username := range req.Members {
+		var userID int
 
-	if err != nil {
-		http.Error(w, "Problem occured when getting the id of the convo", http.StatusInternalServerError)
-		return
-	}
+		err := db.QueryRow(`SELECT id FROM users WHERE username = ?`, username).Scan(&userID)
 
-	var userId int
-
-	err = db.QueryRow(`SELECT users.id FROM sessions JOIN users ON sessions.username = users.username WHERE sessions.session_token = ?`, cookie.Value).Scan(&userId)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "User doesnt exist", http.StatusInternalServerError)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		http.Error(w, "Problem while scanning for user ID occured", http.StatusInternalServerError)
-		return
-	}
+		_, err = db.Exec(
+			`INSERT INTO user_in_conversation(user_id, conversation_id)
+			VALUES (?, ?)`,
+			userID,
+			conversationId,
+		)
 
-	_, err = db.Exec("INSERT into user_in_conversation (user_id, conversation_id) VALUES (?, ?)", userId, conversationID)
-
-	if err != nil {
-		http.Error(w, "something happend while inserting data into 'user_in_conversation' table", http.StatusInternalServerError)
-		return
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "The new convo was created",
+	w.WriteHeader(http.StatusCreated)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"conversation": map[string]interface{}{
+			"id":   conversationId,
+			"name": req.Name,
+		},
 	})
 
 }
@@ -163,10 +158,17 @@ func JoinConvo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var conversation models.Conversation
+
+	err = db.QueryRow(
+		`SELECT conversation_id, name
+     FROM conversations
+     WHERE conversation_id = ?`,
+		convoID,
+	).Scan(&conversation.ID, &conversation.Name)
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "The user was added to the conversation",
-	})
+	json.NewEncoder(w).Encode(conversation)
 
 }
 

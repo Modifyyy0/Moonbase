@@ -23,6 +23,11 @@ type ConversationDetails struct {
 	Members []Member `json:"members"`
 }
 
+type CreateConversationRequest struct {
+	Members []string `json:"Members"`
+	Name    string   `json:"Name"`
+}
+
 func CreateConvo(name string) error {
 	_, err := db.DB.Exec(
 		"INSERT INTO conversations (name) VALUES (?)",
