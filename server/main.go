@@ -35,5 +35,5 @@ func main() {
 	http.HandleFunc("DELETE /api/deleteUser", handlers.DeleteUser)
 
 	fmt.Println("Server running at http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":8080", corsMiddleware(http.DefaultServeMux)))
 }
