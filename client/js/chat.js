@@ -2,12 +2,23 @@ import { rest } from "./rest.js";
 import { ChatWebSocket } from "./ws.js";
 const messageInput = document.getElementById("message-input")
 const convoContainer = document.getElementById("convo-container")
-const ws = new ChatWebSocket();
+const createConversationButton = document.getElementById("new-convo-button")
+const createConversationCloseButton = document.querySelector("#create-conversation-top-container button")
+const popout = document.getElementById("popout")
 
+const ws = new ChatWebSocket();
 let current_conversation_id = 12
 
 document.addEventListener("DOMContentLoaded", () => {
     ws.connect()
+})
+
+createConversationButton.addEventListener("click", () => {
+    popout.style = "z-index: 1; opacity: 1"
+})
+
+createConversationCloseButton.addEventListener("click", () => {
+    popout.style = "z-index: -1; opacity: 0"
 })
 
 messageInput.addEventListener("keydown", (event) => {
