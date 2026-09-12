@@ -1,7 +1,7 @@
 const API_BASE = "";
 
 async function request(path, options = {}) {
-    const response = await fetch(`${API_BASE}${path}`, {
+    const response = await fetch(`http://localhost:6767${API_BASE}${path}`, {
         ...options,
 
         headers: {
@@ -29,10 +29,10 @@ async function request(path, options = {}) {
 export const rest = {
 
     // POST /api/login
-    async login(username) {
+    async login(name) {
         return request("/login", {
             method: "POST",
-            body: JSON.stringify({ username }),
+            body: JSON.stringify({ name }),
         });
     },
 
@@ -58,10 +58,10 @@ export const rest = {
 
 
     // POST /api/conversations
-    async createConversation(members) {
+    async createConversation(Name, members) {
         return request("/conversations", {
             method: "POST",
-            body: JSON.stringify({ members }),
+            body: JSON.stringify({ Name, members }),
         });
     },
 
