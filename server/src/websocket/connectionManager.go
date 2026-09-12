@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 	"encoding/json"
+	"log"
 )
 
 type Client struct {
@@ -96,6 +97,7 @@ func WritePump(client *Client) {
 			//On optimization this is definitely one of the parts i have to work on
             user, err := models.FindUserById(message.UserID)
             if err != nil {
+				log.Println("ProcessMessage error:", err)
                 return
             }
 
@@ -108,6 +110,7 @@ func WritePump(client *Client) {
             newMessage.Data.SentTime = message.SentAt
 
             if err := client.Conn.WriteJSON(newMessage); err != nil {
+				log.Println("ProcessMessage error:", err)
                 return
             }
 
@@ -127,6 +130,7 @@ func ReadPump(client *Client, manager *ConnectionManager) {
 	for {
 		frameType, data, err := client.Conn.ReadMessage()
 		if err != nil {
+			log.Println("ProcessMessage error:", err)
 			return
 		}
 
@@ -137,10 +141,12 @@ func ReadPump(client *Client, manager *ConnectionManager) {
 		var message IncomingMessage
 
 		if err := json.Unmarshal(data, &message); err != nil {
+			log.Println("ProcessMessage error:", err)
 			continue
 		}
 
 		if err := ProcessMessage(client, message, manager); err != nil {
+			log.Println("ProcessMessage error:", err)
 			return
 		}
 	}
@@ -155,11 +161,13 @@ func ProcessMessage(client *Client, message IncomingMessage, manager *Connection
 			message.Data.Content,
 		)
 		if err != nil {
+			log.Println("ProcessMessage error:", err)
 			return err
 		}
 
 		users, err := models.FindAllUserFromConvoByID(message.Data.ConversationID)
 		if err != nil {
+			log.Println("ProcessMessage error:", err)
 			return err
 		}
 
