@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'Poppins';
-  src: url('../assets/fonts/Poppins/Poppins-Medium.ttf') format('truetype');
+  src: url('../assets/fonts/Poppins/Poppins-Regular.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -385,6 +385,8 @@ body {
     align-items: center;
     height: 50%;
     width: 40%;
+    min-width: 650px;
+    background-color: black;
 }
 
 #create-conversation-top-container {
@@ -392,6 +394,7 @@ body {
     background-color: white;
     display: flex;
     justify-content: space-between;
+    align-items: center;
     height: 50px;
 }
 
@@ -409,15 +412,27 @@ body {
     color: black;
     background: none;
     border: none;
-    aspect-ratio: 0.7/1;
-    transform: scaleY(0.7);
+    width: 30px;
+    height: 30px;
+    aspect-ratio: 1/1;
     margin-right: 5px;
     transition: all ease-in-out 0.2s;
     border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#create-conversation-top-container button span {
+    transition: all ease-in-out 0.2s;
+    color: black;
 }
 
 #create-conversation-top-container button:hover {
     background-color: black;
+}
+
+#create-conversation-top-container button:hover span {
     color: white;
 }
 
@@ -431,8 +446,9 @@ body {
 
 #create-conversation-middle-container input {
     width: calc(100% - 50px);
-    margin: 5px 20px;
-    color: #4d4d4d;
+    margin: 15px 20px;
+    font-size: 18px;
+    color: white;
     background-color: black;
     border: #4d4d4d solid 2px;
     border-radius: 26px;
@@ -452,10 +468,11 @@ body {
     width: 70%;
     font-size: 26px;
     text-align: center;
+    line-height: 25px;
 }
 
 #create-conversation-bottom-container {
-    height: 50px;
+    height: 70px;
     width: calc(100% - 40px);
     display: flex;
     align-items: center;
@@ -465,27 +482,35 @@ body {
 }
 
 #create-conversation-bottom-container img {
-    width: 30px;
-    height: 30px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
 }
 
 #create-conversation-bottom-container input {
+    font-size: 18px;
     border-radius: 26px;
     border: #4D4D4D solid 2px;
-    color: #4d4d4d;
+    color: white;
     background: black;
     padding-left: 10px;
     width: calc(60% - 10px);
+    height: 35px;
+    margin-left: 15px;
+    margin-right: 15px;
 }
 
 #create-conversation-bottom-container button {
+    font-size: 18px;
+    text-wrap-mode: nowrap;
     border-radius: 26px;
     border: white solid 2px;
     color: white;
     background: black;
-    width: 30%;
+    width: 40%;
+    height: 39px;
     min-width: 150px;
+    max-width: 235px;
     transition: all ease-in-out 0.2s;
 }
 
