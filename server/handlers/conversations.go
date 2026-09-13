@@ -256,12 +256,7 @@ func ConvoInfo(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(`
         SELECT
             users.id,
-            users.username,
-            EXISTS(
-                SELECT 1
-                FROM sessions
-                WHERE sessions.username = users.username
-            ) AS online
+            users.username
         FROM user_in_conversation
         JOIN users
             ON user_in_conversation.user_id = users.id
@@ -281,7 +276,6 @@ func ConvoInfo(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&member.ID,
 			&member.Username,
-			&member.Online,
 		)
 
 		if err != nil {
@@ -289,6 +283,7 @@ func ConvoInfo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		_, member.Online = manager.GetClient(member.ID)
 		conversation.Members = append(conversation.Members, member)
 	}
 
