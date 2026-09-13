@@ -10,6 +10,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	"Moonbase/src/db"
+	"Moonbase/src/models"
 )
 
 func generateSessionID() string {
@@ -30,13 +31,13 @@ func HandleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var username string
+	var currentUser models.User
 
-	err = db.QueryRow("SELECT username FROM sessions WHERE session_token = ?", cookie.Value).Scan(&username)
+	err = db.QueryRow("SELECT username FROM sessions WHERE session_token = ?", cookie.Value).Scan(&currentUser.Name)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			http.Error(w, "No users were found", http.StatusUnauthorized)
 			return
 		}
 
@@ -44,10 +45,10 @@ func HandleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = db.QueryRow("SELECT id FROM users WHERE username = ?", currentUser.Name).Scan(&currentUser.ID)
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"username": username,
-	})
+	json.NewEncoder(w).Encode(currentUser)
 }
 
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {

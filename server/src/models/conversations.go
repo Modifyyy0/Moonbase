@@ -18,9 +18,15 @@ type Member struct {
 }
 
 type ConversationDetails struct {
-	ID      int      `json:"id"`
-	Name    string   `json:"name"`
-	Members []Member `json:"members"`
+	ID          int      `json:"id"`
+	Name        string   `json:"name"`
+	Members     []Member `json:"members"`
+	MemberCount int      `json:"membersCount"`
+}
+
+type CreateConversationRequest struct {
+	Members []string `json:"Members"`
+	Name    string   `json:"Name"`
 }
 
 func CreateConvo(name string) error {
