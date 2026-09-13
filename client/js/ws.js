@@ -33,9 +33,20 @@ export class ChatWebSocket {
                 ? "wss:"
                 : "ws:";
 
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        const host = "localhost:6767";
+        const wsUrl = `${protocol}//${host}/ws`;
 
         this.socket = new WebSocket(wsUrl);
+
+        
+        this.socket.addEventListener("close", (event) => {
+            console.log("WebSocket disconnected");
+
+            if (this.onClose) {
+                this.onClose(event);
+            }
+        });
+
 
         this.socket.addEventListener("open", () => {
             console.log("WebSocket connected");
@@ -50,14 +61,6 @@ export class ChatWebSocket {
             this.handleMessage(event.data);
         });
 
-
-        this.socket.addEventListener("close", (event) => {
-            console.log("WebSocket disconnected");
-
-            if (this.onClose) {
-                this.onClose(event);
-            }
-        });
 
 
         this.socket.addEventListener("error", (error) => {
@@ -76,7 +79,7 @@ export class ChatWebSocket {
         try {
             message = JSON.parse(rawMessage);
         } catch (error) {
-            console.error("Invalid WebSocket JSON:", rawMessage);
+            console.log("[WS]", rawMessage);
             return;
         }
 

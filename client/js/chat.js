@@ -1,156 +1,284 @@
 import { rest } from "./rest.js";
 import { ChatWebSocket } from "./ws.js";
-const messageInput = document.getElementById("message-input")
-const convoContainer = document.getElementById("convo-container")
-const newConversationButton = document.getElementById("new-convo-button")
-const createConversationCloseButton = document.querySelector("#create-conversation-top-container button")
-const createConversationNameInput = document.querySelector("#create-conversation-bottom-container input")
-const createConversationButton = document.querySelector("#create-conversation-bottom-container button")
 
-const conversationList = document.getElementById("side-bar-list")
-const popout = document.getElementById("popout")
+const elements = {
+    messageInput: document.getElementById("message-input"),
+    convoContainer: document.getElementById("convo-container"),
+    newConversationButton: document.getElementById("new-convo-button"),
+    createConversationCloseButton: document.querySelector("#create-conversation-top-container button"),
+    createConversationNameInput: document.querySelector("#create-conversation-bottom-container input"),
+    createConversationButton: document.querySelector("#create-conversation-bottom-container button"),
+    conversationList: document.getElementById("side-bar-list"),
+    popout: document.getElementById("popout"),
+    memberButton: document.getElementById("info-bar-select-members"),
+    infoButton: document.getElementById("info-bar-select-info"),
+    infoBarMembers: document.getElementById("info-bar-members"),
+    infoBarInfo: document.getElementById("info-bar-info"),
+    logoutButton: document.getElementById("logout-button"),
+    convoHeadName: document.getElementById("convo-head-name"),
+    convoHeadOnline: document.getElementById("convo-head-online"),
+    convoHeadMembers: document.getElementById("convo-head-members"),
+};
 
 const ws = new ChatWebSocket();
-let current_conversation_id = 12
+const state = {
+    conversations: [],
+    activeConversationId: 19,
+};
 
+const setPopoutVisibility = (isOpen) => {
+    elements.popout.style.zIndex = isOpen ? "1" : "-1";
+    elements.popout.style.opacity = isOpen ? "1" : "0";
+};
 
-const closePopout = () => {
-    popout.style = "z-index: -1; opacity: 0"
+const openPopout = () => setPopoutVisibility(true);
+const closePopout = () => setPopoutVisibility(false);
+
+const formatTime = (date = new Date()) => {
+    return new Date(date).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+    });
 }
 
-const openPopout = () => {
-    popout.style = "z-index: 1; opacity: 1"
-}
-
-
-
-const sendMessage = (user, time, content) => {
-    convoContainer.appendChild(messageBox(user, time, content))
-    
-    const data = {
-        "type": "send_message",
-        "data": {
-            "conversation_id": current_conversation_id,
-            "content": content
-        }
-    }
-    socket.send(JSON.stringify(data))
-}
-
-const messageBox = (user, time, content) => {
-    const template = document.createElement("div")
+const createMessageBox = (user, time, content) => {
+    const template = document.createElement("div");
     template.innerHTML = `
         <div class="message-box">
             <img class="message-pfp" src="assets/image.png" alt="">
             <div class="message-box-text">
-                <p class="message-box-user"><span class="message-box-username"></span> <span
-                        class="message-box-time"></span></p>
+                <p class="message-box-user">
+                    <span class="message-box-username"></span>
+                    <span class="message-box-time"></span>
+                </p>
                 <p class="message-content"></p>
             </div>
         </div>
-    `
+    `;
+
     const element = template.querySelector(".message-box");
-    element.querySelector('.message-box-username').textContent = user
-    element.querySelector('.message-box-time').textContent = time
-    element.querySelector('.message-content').textContent = content
+    element.querySelector(".message-box-username").textContent = user;
+    element.querySelector(".message-box-time").textContent = time;
+    element.querySelector(".message-content").textContent = content;
 
-    return element
-}
+    return element;
+};
 
-const dateLine = (date) => {
-    const template = document.createElement('div')
-    template.innerHTML = `
-        <div class="date-line">
-            <div></div>
-            <p></p>
-            <div></div>
-        </div>
-    `
-    template.querySelector("p").textContent = date;
-    return template.querySelector("date-line")
-}
-
-const sideBarConvoElement = (convoName, convoMemberCount) => {
-    const template = document.createElement('div')
+const createSidebarConversation = (convo, { selected = false } = {}) => {
+    const template = document.createElement("div");
     template.innerHTML = `
         <div class="side-bar-convo">
             <img class="side-bar-convo-pfp" src="assets/images/placeholder.png" alt="">
             <div class="side-bar-convo-text">
-                <p class="side-bar-convo-name">Lorem Ipsum</p>
-                <p class="side-bar-convo-members">6 members</p>
+                <p class="side-bar-convo-name"></p>
+                <p class="side-bar-convo-members"></p>
             </div>
         </div>
-    `
-    template.querySelector(".side-bar-convo-name").textContent = convoName
-    template.querySelector(".side-bar-convo-members").textContent = `${convoMemberCount} members`
-    return template.querySelector(".side-bar-convo")
-}
+    `;
 
-const loadConversations = async () => {
-    const convos = await rest.getConversations()
-    conversationList.innerHTML = ""
-    convos.forEach(convo => {
-        conversationList.appendChild(sideBarConvoElement(convo, 1))
-    });
-}
+    const conversation = template.querySelector(".side-bar-convo");
+    const name = convo?.name ?? convo?.Name ?? "Conversation";
+    const memberCount = Number(convo?.memberCount ?? convo?.members?.length ?? 1);
 
-const memberButton = document.getElementById("info-bar-select-members")
-const infoButton = document.getElementById("info-bar-select-info")
-const infoBarMembers = document.getElementById("info-bar-members")
-const infoBarInfo = document.getElementById("info-bar-info")
+    conversation.querySelector(".side-bar-convo-name").textContent = name;
+    conversation.querySelector(".side-bar-convo-members").textContent = `${memberCount} members`;
 
-memberButton.addEventListener("click", () => {
-    infoBarMembers.style = "display: block"
-    infoBarInfo.style = "display: none"
-    memberButton.classList.add("info-bar-select-selected")
-    infoButton.classList.remove("info-bar-select-selected")
-})
+    if (selected) {
+        conversation.classList.add("active");
+    }
 
-infoButton.addEventListener("click", () => {
-    infoBarMembers.style = "display: none"
-    infoBarInfo.style = "display: flex"
-    infoButton.classList.add("info-bar-select-selected")
-    memberButton.classList.remove("info-bar-select-selected")
-})
+    return conversation;
+};
 
+const renderConversations = (conversations = []) => {
+    elements.conversationList.innerHTML = "";
+    state.conversations = conversations;
 
-document.addEventListener("DOMContentLoaded", () => {
-    ws.connect()
-    loadConversations()
-})
+    conversations.forEach((convo) => {
+        const convoId = Number(convo?.id ?? convo?.ID ?? convo?.conversation_id);
+        const selected = convoId === state.activeConversationId;
+        const item = createSidebarConversation(convo, { selected });
 
-
-
-newConversationButton.addEventListener("click", openPopout)
-
-createConversationCloseButton.addEventListener("click", closePopout)
-
-createConversationButton.addEventListener("click", async () => {
-    const conversationName = createConversationNameInput.value
-    closePopout()
-    await rest.createConversation(conversationName, ["mango"])
-    await loadConversations()
-})
-
-// setInterval(() => {
-//     loadConversations()
-// }, 2000);
-
-messageInput.addEventListener("keydown", (event) => {
-    if (event.key == "Enter" && !event.ctrlKey) {
-        console.log("hmm")
-        event.preventDefault()
-        const content = messageInput.value.trim()
-
-        if (content === "") {
-            return
+        if (convoId) {
+            item.addEventListener("click", () => selectConversation(convoId));
         }
 
-        sendMessage("mango", "1:21", content)
-        messageInput.value = ""
+        elements.conversationList.appendChild(item);
+    });
+};
+
+const populateConversationHeader = (conversation = {}) => {
+    const title = conversation.name ?? conversation.Name ?? "Conversation";
+    const memberCount = Number(conversation.memberCount ?? conversation.members?.length ?? 0);
+    const onlineCount = Array.isArray(conversation.members)
+        ? conversation.members.filter((member) => member.online).length
+        : 0;
+
+    elements.convoHeadName.textContent = title;
+    elements.convoHeadMembers.textContent = `${memberCount} members`;
+    elements.convoHeadOnline.textContent = `${onlineCount} online`;
+};
+
+const loadConversationMessages = async (conversationId) => {
+    try {
+        const messages = await rest.getMessages(conversationId);
+        elements.convoContainer.innerHTML = "";
+
+        (messages || []).forEach((message) => {
+            const username = message.sender_username ?? message.SenderUsername ?? "unknown";
+            const content = message.content ?? message.Content ?? "";
+            const sentAt = message.sent_time ?? message.SentAt ?? new Date();
+            addMessageToView(username, content, sentAt);
+        });
+    } catch (error) {
+        console.error("Failed to load conversation messages:", error);
     }
-    if (event.key == "Enter" && event.ctrlKey) {
-        console.log("oh?")
-        messageInput.value += "\n"
+};
+
+const selectConversation = async (conversationId) => {
+    const validId = Number(conversationId);
+    if (!validId) {
+        return;
     }
-})
+
+    state.activeConversationId = validId;
+
+    try {
+        const conversation = await rest.getConversation(validId);
+        populateConversationHeader(conversation || {});
+        await loadConversationMessages(validId);
+        renderConversations(state.conversations);
+    } catch (error) {
+        console.error("Failed to load selected conversation:", error);
+    }
+};
+
+const loadConversations = async () => {
+    try {
+        const convos = await rest.getConversations();
+        const conversationList = Array.isArray(convos) ? convos : [];
+        renderConversations(conversationList);
+
+        if (conversationList.length > 0) {
+            const firstId = Number(conversationList[0].id ?? conversationList[0].ID ?? conversationList[0].conversation_id);
+            if (firstId) {
+                await selectConversation(firstId);
+            }
+        }
+    } catch (error) {
+        console.error("Failed to load conversations:", error);
+    }
+};
+
+const toggleInfoPanel = (selectedTab) => {
+    const isMembersSelected = selectedTab === "members";
+
+    elements.infoBarMembers.style.display = isMembersSelected ? "block" : "none";
+    elements.infoBarInfo.style.display = isMembersSelected ? "none" : "flex";
+
+    elements.memberButton.classList.toggle("info-bar-select-selected", isMembersSelected);
+    elements.infoButton.classList.toggle("info-bar-select-selected", !isMembersSelected);
+};
+
+const addMessageToView = (user, content, sentAt = new Date()) => {
+    const time = formatTime(sentAt);
+    elements.convoContainer.appendChild(createMessageBox(user, time, content));
+};
+
+const handleIncomingMessage = (message) => {
+    if (!message || Number(message.conversation_id) !== state.activeConversationId) {
+        return;
+    }
+
+    addMessageToView(message.sender_username || "unknown", message.content, message.sent_time || new Date());
+};
+
+const handlePresenceUpdate = (type, data) => {
+    if (!data || Number(data.conversation_id) !== state.activeConversationId) {
+        return;
+    }
+
+    console.log(`${type} event:`, data);
+};
+
+const sendMessage = (content) => {
+    if (!state.activeConversationId) {
+        console.warn("No active conversation selected.");
+        return;
+    }
+
+    // addMessageToView("mango", content);
+
+    console.log("Sending chat message for conversation:", state.activeConversationId, content);
+    ws.sendMessage(state.activeConversationId, content);
+};
+
+const handleCreateConversation = async () => {
+    const conversationName = elements.createConversationNameInput.value.trim();
+
+    if (!conversationName) {
+        return;
+    }
+
+    closePopout();
+
+    try {
+        await rest.createConversation(conversationName, ["mango"]);
+        await loadConversations();
+    } catch (error) {
+        console.error("Failed to create conversation:", error);
+    }
+};
+
+const handleMessageInputKeydown = (event) => {
+    if (event.key === "Enter" && !event.ctrlKey) {
+        event.preventDefault();
+
+        const content = elements.messageInput.value.trim();
+        if (!content) {
+            return;
+        }
+
+        sendMessage(content);
+        elements.messageInput.value = "";
+    }
+
+    if (event.key === "Enter" && event.ctrlKey) {
+        elements.messageInput.value += "\n";
+    }
+};
+
+const logout = async () => {
+    try {
+        await rest.logout();
+        window.location.href = "login.html";
+    } catch (error) {
+        console.error("Logout failed:", error);
+        window.location.href = "login.html";
+    }
+};
+
+const bindEvents = () => {
+    ws.on("new_message", handleIncomingMessage);
+    ws.on("user_online", (data) => handlePresenceUpdate("user_online", data));
+    ws.on("user_offline", (data) => handlePresenceUpdate("user_offline", data));
+
+    elements.newConversationButton.addEventListener("click", openPopout);
+    elements.createConversationCloseButton.addEventListener("click", closePopout);
+    elements.createConversationButton.addEventListener("click", handleCreateConversation);
+    elements.messageInput.addEventListener("keydown", handleMessageInputKeydown);
+    elements.memberButton.addEventListener("click", () => toggleInfoPanel("members"));
+    elements.infoButton.addEventListener("click", () => toggleInfoPanel("info"));
+
+    if (elements.logoutButton) {
+        elements.logoutButton.addEventListener("click", logout);
+    }
+};
+
+document.addEventListener("DOMContentLoaded", async () => {
+    bindEvents();
+    ws.connect();
+    await loadConversations();
+    await selectConversation(19);
+
+});
