@@ -8,29 +8,30 @@ import (
 type Message struct {
 	ID             int
 	UserID         int
+	Username       string
 	ConversationID int
 	Content        string
 	SentAt         time.Time
 }
 
 func CreateMessage(userID int, conversationID int, content string) (*Message, error) {
-    result, err := db.DB.Exec(
-        "INSERT INTO messages (user_id, conversation_id, content) VALUES (?, ?, ?)",
-        userID,
-        conversationID,
-        content,
-    )
+	result, err := db.DB.Exec(
+		"INSERT INTO messages (user_id, conversation_id, content) VALUES (?, ?, ?)",
+		userID,
+		conversationID,
+		content,
+	)
 
-    if err != nil {
-        return nil, err
-    }
+	if err != nil {
+		return nil, err
+	}
 
-    id, err := result.LastInsertId()
-    if err != nil {
-        return nil, err
-    }
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
 
-    return FindMessageByID(int(id))
+	return FindMessageByID(int(id))
 }
 
 func (message Message) DeleteMessage() error {
@@ -54,6 +55,7 @@ func FindMessageByID(id int) (*Message, error) {
 	err := db.DB.QueryRow(query, id).Scan(
 		&message.ID,
 		&message.UserID,
+
 		&message.ConversationID,
 		&message.Content,
 		&message.SentAt,
@@ -92,6 +94,12 @@ func FindMessagesByConversationID(conversationID int) ([]Message, error) {
 			&message.Content,
 			&message.SentAt,
 		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		err = db.QueryRow(`SELECT username FROM users WHERE id = ?`, message.UserID).Scan(&message.Username)
 
 		if err != nil {
 			return nil, err
