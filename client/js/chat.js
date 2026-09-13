@@ -454,6 +454,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     bindEvents();
     ws.connect();
     await loadConversations();
-    await selectConversation(19);
-
 });
