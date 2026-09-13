@@ -14,14 +14,31 @@ import (
 )
 
 func GetUsers(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var currentUserID int
+	err = db.QueryRow(`
+		SELECT users.id
+		FROM sessions
+		JOIN users ON users.username = sessions.username
+		WHERE sessions.session_token = ?
+	`, cookie.Value).Scan(&currentUserID)
+	if err != nil {
+		http.Error(w, "Could not resolve current user", http.StatusUnauthorized)
+		return
+	}
+
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	var rows *sql.Rows
-	var err error
 
 	if query == "" {
-		rows, err = db.Query("SELECT id, username FROM users ORDER BY username ASC")
+		rows, err = db.Query("SELECT id, username FROM users WHERE id != ? ORDER BY username ASC", currentUserID)
 	} else {
-		rows, err = db.Query("SELECT id, username FROM users WHERE username LIKE ? ORDER BY username ASC LIMIT 20", "%"+query+"%")
+		rows, err = db.Query("SELECT id, username FROM users WHERE id != ? AND username LIKE ? ORDER BY username ASC LIMIT 20", currentUserID, "%"+query+"%")
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

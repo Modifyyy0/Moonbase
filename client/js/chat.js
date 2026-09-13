@@ -222,11 +222,13 @@ const loadConversationMessages = async (conversationId) => {
 
 const selectConversation = async (conversationId) => {
     const validId = Number(conversationId);
+    state.activeConversationId = validId;
     if (!validId) {
+        renderConversations([])
+        populateConversationHeader({})
         return;
     }
 
-    state.activeConversationId = validId;
 
     try {
         const conversation = await rest.getConversation(validId);
@@ -246,9 +248,8 @@ const loadConversations = async () => {
 
         if (conversationList.length > 0) {
             const firstId = Number(conversationList[0].id ?? conversationList[0].ID ?? conversationList[0].conversation_id);
-            if (firstId) {
-                await selectConversation(firstId);
-            }
+            selectConversation(firstId);
+
         }
     } catch (error) {
         console.error("Failed to load conversations:", error);
