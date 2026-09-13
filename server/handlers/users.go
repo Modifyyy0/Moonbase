@@ -34,60 +34,47 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(users)
 }
 
-func NewUser(w http.ResponseWriter, r *http.Request) {
-	var u models.User
-	err := json.NewDecoder(r.Body).Decode(&u)
-
-	if err != nil {
-		http.Error(w, "The user was not created", http.StatusInternalServerError)
-		return
-	}
-
-	_, err = db.Exec("INSERT INTO users (username) VALUES (?)", u.Name)
-
-	if err != nil {
-		http.Error(w, "The user was not stored in the database", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "The user was created and stroed in the db!",
-	})
-
-}
-
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
-
 	var u models.User
-
-	err := json.NewDecoder(r.Body).Decode(&u)
-
-	if err != nil {
-		http.Error(w, "The user json was not decoded", http.StatusInternalServerError)
+	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+		http.Error(w, "The user json was not decoded", http.StatusBadRequest)
 		return
 	}
 
-	var UserIn string
-
-	query := "SELECT username FROM users WHERE username = ?"
-
-	err = db.QueryRow(query, u.Name).Scan(&UserIn)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "The user doest exist", http.StatusInternalServerError)
+	created := false
+	err := db.QueryRow(`SELECT id FROM users WHERE username = ?`, u.Name).Scan(&u.ID)
+	if err == sql.ErrNoRows {
+		result, insertErr := db.Exec(`INSERT INTO users (username) VALUES (?)`, u.Name)
+		if insertErr != nil {
+			http.Error(w, "could not create user", http.StatusInternalServerError)
 			return
 		}
 
-		http.Error(w, "There is something wrong with checking the user", http.StatusInternalServerError)
+		id, idErr := result.LastInsertId()
+		if idErr != nil {
+			http.Error(w, "could not read new user ID", http.StatusInternalServerError)
+			return
+		}
+		u.ID = int(id)
+		created = true
+	} else if err != nil {
+		http.Error(w, "could not find user", http.StatusInternalServerError)
 		return
 	}
 
 	sessionID := generateSessionID()
+	_, err = db.Exec(
+		`INSERT INTO sessions (username, session_token, createdAt) VALUES (?, ?, ?)`,
+		u.Name,
+		sessionID,
+		time.Now(),
+	)
+	if err != nil {
+		http.Error(w, "could not create session", http.StatusInternalServerError)
+		return
+	}
 
 	http.SetCookie(w, &http.Cookie{
-
 		Name:     "session_token",
 		Value:    sessionID,
 		Path:     "/",
@@ -96,21 +83,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	_, err = db.Exec(`INSERT INTO sessions (username, session_token, createdAt) values (?, ?, ?)`, UserIn, sessionID, time.Now())
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	w.Header().Set("Content-Type", "application/json")
+	if created {
+		w.WriteHeader(http.StatusCreated)
 	}
-
-	err = db.QueryRow(`SELECT id FROM users WHERE username = ?`, UserIn).Scan(&u.ID)
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(u)
 }
 

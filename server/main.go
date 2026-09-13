@@ -56,7 +56,6 @@ func main() {
 	http.HandleFunc("GET /api/conversations/{convoID}/messages", handlers.GetMessages)
 	http.HandleFunc("POST /api/join/{convoID}", handlers.JoinConvo)
 
-	http.HandleFunc("POST /api/newUser", handlers.NewUser)
 	http.HandleFunc("DELETE /api/deleteUser", handlers.DeleteUser)
 	
 	http.HandleFunc("/ws", handlers.HandleWebsocket)
