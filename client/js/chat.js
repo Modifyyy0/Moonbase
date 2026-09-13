@@ -18,12 +18,16 @@ const elements = {
     convoHeadName: document.getElementById("convo-head-name"),
     convoHeadOnline: document.getElementById("convo-head-online"),
     convoHeadMembers: document.getElementById("convo-head-members"),
+    infoBarOnline: document.getElementById("info-bar-online"),
+    infoBarOffline: document.getElementById("info-bar-offline"),
+    infoBarConvoName: document.getElementById("info-bar-convo-name"),
 };
 
 const ws = new ChatWebSocket();
 const state = {
     conversations: [],
     activeConversationId: 19,
+    currentConversation: null,
 };
 
 const setPopoutVisibility = (isOpen) => {
@@ -107,7 +111,57 @@ const renderConversations = (conversations = []) => {
     });
 };
 
+const renderMemberList = (members = []) => {
+    const existingCards = elements.infoBarMembers.querySelectorAll(".info-bar-user");
+    existingCards.forEach((card) => card.remove());
+
+    const onlineMembers = members.filter((member) => member.online);
+    const offlineMembers = members.filter((member) => !member.online);
+    console.log(onlineMembers)
+    console.log(offlineMembers)
+
+    elements.infoBarOnline.textContent = `Online (${onlineMembers.length})`;
+    elements.infoBarOffline.textContent = `Offline (${offlineMembers.length})`;
+
+    const onlineSection = document.createElement("div");
+    onlineSection.className = "info-bar-member-section";
+
+    const offlineSection = document.createElement("div");
+    offlineSection.className = "info-bar-member-section";
+
+    onlineMembers.forEach((member) => {
+        const card = document.createElement("div");
+        card.className = "info-bar-user";
+
+        card.innerHTML = `
+            <img class="info-bar-pfp" src="assets/images/placeholder.png" alt="">
+            <p class="info-bar-username"></p>
+        `;
+
+        card.querySelector(".info-bar-username").textContent = member.username ?? member.Username ?? "Unknown";
+        onlineSection.appendChild(card);
+    });
+
+    offlineMembers.forEach((member) => {
+        const card = document.createElement("div");
+        card.className = "info-bar-user";
+
+        card.innerHTML = `
+            <img class="info-bar-pfp" src="assets/images/placeholder.png" alt="">
+            <p class="info-bar-username"></p>
+        `;
+
+        card.querySelector(".info-bar-username").textContent = member.username ?? member.Username ?? "Unknown";
+        offlineSection.appendChild(card);
+    });
+
+    elements.infoBarOnline.after(onlineSection);
+    elements.infoBarOffline.after(offlineSection);
+};
+
 const populateConversationHeader = (conversation = {}) => {
+    state.currentConversation = conversation;
+
     const title = conversation.name ?? conversation.Name ?? "Conversation";
     const memberCount = Number(conversation.memberCount ?? conversation.members?.length ?? 0);
     const onlineCount = Array.isArray(conversation.members)
@@ -117,6 +171,8 @@ const populateConversationHeader = (conversation = {}) => {
     elements.convoHeadName.textContent = title;
     elements.convoHeadMembers.textContent = `${memberCount} members`;
     elements.convoHeadOnline.textContent = `${onlineCount} online`;
+    elements.infoBarConvoName.textContent = title;
+    renderMemberList(Array.isArray(conversation.members) ? conversation.members : []);
 };
 
 const loadConversationMessages = async (conversationId) => {
@@ -198,7 +254,20 @@ const handlePresenceUpdate = (type, data) => {
         return;
     }
 
-    console.log(`${type} event:`, data);
+    if (!state.currentConversation || !Array.isArray(state.currentConversation.members)) {
+        return;
+    }
+
+    const member = state.currentConversation.members.find((entry) =>
+        Number(entry.id) === Number(data.user_id) || entry.username === data.username
+    );
+
+    if (!member) {
+        return;
+    }
+
+    member.online = type === "user_online";
+    populateConversationHeader(state.currentConversation);
 };
 
 const sendMessage = (content) => {
