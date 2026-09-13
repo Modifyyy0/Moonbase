@@ -1,12 +1,7 @@
 package main
 
 import (
-	"Moonbase/src/websocket"
 	"Moonbase/src/db"
-	"crypto/rand"
-	"database/sql"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,7 +9,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	"Moonbase/handlers"
-	"Moonbase/src/db"
 )
 
 var allowedOrigins = map[string]bool{
@@ -64,6 +58,8 @@ func main() {
 
 	http.HandleFunc("POST /api/newUser", handlers.NewUser)
 	http.HandleFunc("DELETE /api/deleteUser", handlers.DeleteUser)
+	
+	http.HandleFunc("/ws", handlers.HandleWebsocket)
 
 	fmt.Println("Server running at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", corsMiddleware(http.DefaultServeMux)))

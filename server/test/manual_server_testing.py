@@ -22,6 +22,15 @@ receiver = threading.Thread(
 
 receiver.start()
 
+message = {
+    "type": "send_message",
+    "data": {
+        "conversation_id": 1,
+        "content": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    }
+}
+ws.send(json.dumps(message))
+
 time.sleep(2)
 
 ws.close()

@@ -83,7 +83,7 @@ func SendMsg(conn *websocket.Conn, message *models.Message) error {
 	newMessage.Data.ID = message.ID
 	newMessage.Data.ConversationID = message.ConversationID
 	newMessage.Data.SenderID = message.UserID
-	newMessage.Data.SenderUsername = user.Username
+	newMessage.Data.SenderUsername = user.Name
 	newMessage.Data.Content = message.Content
 	newMessage.Data.SentTime = message.SentAt
 

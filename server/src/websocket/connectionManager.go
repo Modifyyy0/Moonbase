@@ -135,7 +135,7 @@ func WritePump(client *Client) {
 				newMessage.Data.ID = newMessageData.ID
 				newMessage.Data.ConversationID = newMessageData.ConversationID
 				newMessage.Data.SenderID = newMessageData.UserID
-				newMessage.Data.SenderUsername = user.Username
+				newMessage.Data.SenderUsername = user.Name
 				newMessage.Data.Content = newMessageData.Content
 				newMessage.Data.SentTime = newMessageData.SentAt
 
@@ -357,7 +357,7 @@ func SendUserOffline(client *Client, manager *ConnectionManager) {
 				Data: PresenceData{
 					ConversationID: conversation.ID,
 					UserID:         client.UserID,
-					Username:       user.Username,
+					Username:       user.Name,
 				},
 			}
 
