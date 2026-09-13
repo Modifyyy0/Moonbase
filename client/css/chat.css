@@ -39,6 +39,13 @@ body {
     width: calc(100% - 290px);
 }
 
+#convo-container {
+    position: absolute;
+    width: 100%;
+    overflow: scroll;
+    height: 90%;
+    max-height: 90%;
+}
 #convo-head-status {
     width: 150px ;
     text-align: right;

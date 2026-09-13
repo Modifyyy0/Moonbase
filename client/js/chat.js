@@ -40,8 +40,10 @@ const closePopout = () => setPopoutVisibility(false);
 
 const formatTime = (date = new Date()) => {
     return new Date(date).toLocaleTimeString([], {
-        hour: "numeric",
+        timeZone: "UTC",
+        hour: "2-digit",
         minute: "2-digit",
+        // hour12: false
     });
 }
 
@@ -82,7 +84,7 @@ const createSidebarConversation = (convo, { selected = false } = {}) => {
 
     const conversation = template.querySelector(".side-bar-convo");
     const name = convo?.name ?? convo?.Name ?? "Conversation";
-    const memberCount = Number(convo?.memberCount ?? convo?.members?.length ?? 1);
+    const memberCount = Number(convo?.member_count ?? convo?.members?.length ?? 1);
 
     conversation.querySelector(".side-bar-convo-name").textContent = name;
     conversation.querySelector(".side-bar-convo-members").textContent = `${memberCount} members`;
@@ -181,10 +183,14 @@ const loadConversationMessages = async (conversationId) => {
         elements.convoContainer.innerHTML = "";
 
         (messages || []).forEach((message) => {
-            const username = message.sender_username ?? message.SenderUsername ?? "unknown";
+            const username = message.sender_username ?? message.Username ?? "unknown";
             const content = message.content ?? message.Content ?? "";
             const sentAt = message.sent_time ?? message.SentAt ?? new Date();
             addMessageToView(username, content, sentAt);
+            elements.convoContainer.scrollTo({
+                top: elements.convoContainer.scrollHeight,
+                behavior: "smooth"
+            });
         });
     } catch (error) {
         console.error("Failed to load conversation messages:", error);
@@ -247,6 +253,7 @@ const handleIncomingMessage = (message) => {
     }
 
     addMessageToView(message.sender_username || "unknown", message.content, message.sent_time || new Date());
+    elements.convoContainer.scrollTop = elements.convoContainer.scrollHeight;
 };
 
 const handlePresenceUpdate = (type, data) => {
