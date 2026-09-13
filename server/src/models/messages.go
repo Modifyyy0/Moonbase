@@ -13,15 +13,24 @@ type Message struct {
 	SentAt         time.Time
 }
 
-func CreateMessage(userID int, conversationID int, content string) error {
-	_, err := db.DB.Exec(
-		"INSERT INTO messages (user_id, conversation_id, content) VALUES (?, ?, ?)",
-		userID,
-		conversationID,
-		content,
-	)
+func CreateMessage(userID int, conversationID int, content string) (*Message, error) {
+    result, err := db.DB.Exec(
+        "INSERT INTO messages (user_id, conversation_id, content) VALUES (?, ?, ?)",
+        userID,
+        conversationID,
+        content,
+    )
 
-	return err
+    if err != nil {
+        return nil, err
+    }
+
+    id, err := result.LastInsertId()
+    if err != nil {
+        return nil, err
+    }
+
+    return FindMessageByID(int(id))
 }
 
 func (message Message) DeleteMessage() error {

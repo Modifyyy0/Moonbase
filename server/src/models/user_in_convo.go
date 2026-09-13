@@ -31,7 +31,7 @@ func RemoveUserFromConversation(userID, conversationID int) error {
 	return err
 }
 
-func findAllConvoFromUserByID(userID int) ([]Conversation, error) {
+func FindAllConvoFromUserByID(userID int) ([]Conversation, error) {
 	query := `
 		SELECT c.id, c.name, c.created_at
 		FROM conversations c
@@ -71,7 +71,7 @@ func findAllConvoFromUserByID(userID int) ([]Conversation, error) {
 	return convos, nil
 }
 
-func findAllUserFromConvoByID(conversationID int) ([]User, error) {
+func FindAllUserFromConvoByID(conversationID int) ([]User, error) {
 	query := `
 		SELECT u.id, u.username
 		FROM users u
