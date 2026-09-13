@@ -1,7 +1,6 @@
 package main
 
 import (
-	"Moonbase/src/models"
 	"Moonbase/src/websocket"
 	"Moonbase/src/db"
 	"crypto/rand"
@@ -66,14 +65,16 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 	client := &websocket.Client{
 		UserID:  user.ID,
 		Conn:    conn,
-		Message: make(chan *models.Message, 16),
+		Message: make(chan websocket.OutgoingMessage, 16),
 		Done:    make(chan struct{}),
 	}
 
 	manager.AddClient(client)
-	
+
 	go websocket.WritePump(client)
 	go websocket.ReadPump(client, manager)
+	
+	websocket.SendUserOnline(client, manager, user.Username)
 }
 
 func generateSessionID() string {
