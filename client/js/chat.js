@@ -15,6 +15,7 @@ const elements = {
     infoBarMembers: document.getElementById("info-bar-members"),
     infoBarInfo: document.getElementById("info-bar-info"),
     logoutButton: document.getElementById("logout-button"),
+    leaveButton: document.getElementById("leave-button"),
     convoHeadName: document.getElementById("convo-head-name"),
     convoHeadOnline: document.getElementById("convo-head-online"),
     convoHeadMembers: document.getElementById("convo-head-members"),
@@ -283,7 +284,6 @@ const sendMessage = (content) => {
         return;
     }
 
-    // addMessageToView("mango", content);
 
     console.log("Sending chat message for conversation:", state.activeConversationId, content);
     ws.sendMessage(state.activeConversationId, content);
@@ -299,7 +299,7 @@ const handleCreateConversation = async () => {
     closePopout();
 
     try {
-        await rest.createConversation(conversationName, ["mango"]);
+        await rest.createConversation(conversationName, []);
         await loadConversations();
     } catch (error) {
         console.error("Failed to create conversation:", error);
@@ -334,6 +334,24 @@ const logout = async () => {
     }
 };
 
+const handleLeaveConversation = async () => {
+    if (!state.activeConversationId) {
+        return;
+    }
+
+    const confirmed = window.confirm("Leave this conversation?");
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        await rest.leaveConversation(state.activeConversationId);
+        await loadConversations();
+    } catch (error) {
+        console.error("Failed to leave conversation:", error);
+    }
+};
+
 const bindEvents = () => {
     ws.on("new_message", handleIncomingMessage);
     ws.on("user_online", (data) => handlePresenceUpdate("user_online", data));
@@ -348,6 +366,10 @@ const bindEvents = () => {
 
     if (elements.logoutButton) {
         elements.logoutButton.addEventListener("click", logout);
+    }
+
+    if (elements.leaveButton) {
+        elements.leaveButton.addEventListener("click", handleLeaveConversation);
     }
 };
 
