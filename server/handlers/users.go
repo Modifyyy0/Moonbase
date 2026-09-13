@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -12,8 +13,16 @@ import (
 	"Moonbase/src/models"
 )
 
-func getUsers(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT username FROM users")
+func GetUsers(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	var rows *sql.Rows
+	var err error
+
+	if query == "" {
+		rows, err = db.Query("SELECT id, username FROM users ORDER BY username ASC")
+	} else {
+		rows, err = db.Query("SELECT id, username FROM users WHERE username LIKE ? ORDER BY username ASC LIMIT 20", "%"+query+"%")
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -24,14 +33,24 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.Name); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		users = append(users, u)
 	}
 
+	if err := rows.Err(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
+}
+
+func getUsers(w http.ResponseWriter, r *http.Request) {
+	GetUsers(w, r)
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {

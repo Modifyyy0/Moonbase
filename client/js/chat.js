@@ -5,9 +5,12 @@ const elements = {
     messageInput: document.getElementById("message-input"),
     convoContainer: document.getElementById("convo-container"),
     newConversationButton: document.getElementById("new-convo-button"),
+    inviteButton: document.getElementById("invite-button"),
     createConversationCloseButton: document.querySelector("#create-conversation-top-container button"),
+    createConversationSearchInput: document.querySelector("#create-conversation-middle-container input"),
     createConversationNameInput: document.querySelector("#create-conversation-bottom-container input"),
     createConversationButton: document.querySelector("#create-conversation-bottom-container button"),
+    inviteUserSearch: document.getElementById("create-conversation-user-search"),
     conversationList: document.getElementById("side-bar-list"),
     popout: document.getElementById("popout"),
     memberButton: document.getElementById("info-bar-select-members"),
@@ -29,6 +32,8 @@ const state = {
     conversations: [],
     activeConversationId: 19,
     currentConversation: null,
+    inviteSelections: [],
+    inviteUsers: [],
 };
 
 const setPopoutVisibility = (isOpen) => {
@@ -36,8 +41,25 @@ const setPopoutVisibility = (isOpen) => {
     elements.popout.style.opacity = isOpen ? "1" : "0";
 };
 
-const openPopout = () => setPopoutVisibility(true);
-const closePopout = () => setPopoutVisibility(false);
+const normalizeUser = (user) => ({
+    id: Number(user?.id ?? user?.ID ?? 0),
+    name: user?.name ?? user?.username ?? user?.Username ?? "Unknown",
+});
+
+const openPopout = async () => {
+    state.inviteSelections = [];
+    elements.createConversationNameInput.value = "";
+    elements.createConversationSearchInput.value = "";
+    await renderInviteUsers();
+    setPopoutVisibility(true);
+};
+
+const closePopout = () => {
+    state.inviteSelections = [];
+    elements.createConversationSearchInput.value = "";
+    elements.createConversationNameInput.value = "";
+    setPopoutVisibility(false);
+};
 
 const formatTime = (date = new Date()) => {
     return new Date(date).toLocaleTimeString([], {
@@ -289,6 +311,55 @@ const sendMessage = (content) => {
     ws.sendMessage(state.activeConversationId, content);
 };
 
+const renderInviteUsers = async (query = "") => {
+    try {
+        const users = await rest.getUsers(query);
+        state.inviteUsers = (Array.isArray(users) ? users : []).map(normalizeUser);
+
+        elements.inviteUserSearch.innerHTML = "";
+
+        if (!state.inviteUsers.length) {
+            const emptyMessage = document.createElement("p");
+            emptyMessage.textContent = "No users found";
+            emptyMessage.style.color = "#4d4d4d";
+            emptyMessage.style.fontSize = "20px";
+            elements.inviteUserSearch.appendChild(emptyMessage);
+            return;
+        }
+
+        state.inviteUsers.forEach((user) => {
+            const row = document.createElement("div");
+            row.className = "invite-user-row";
+
+            const isSelected = state.inviteSelections.some((entry) => entry.id === user.id);
+            const circle = document.createElement("span");
+            circle.className = `invite-user-circle ${isSelected ? "selected" : ""}`;
+            circle.textContent = isSelected ? "✓" : "";
+
+            const label = document.createElement("span");
+            label.textContent = user.name;
+
+            row.append(circle, label);
+            row.addEventListener("click", () => toggleInviteSelection(user));
+            elements.inviteUserSearch.appendChild(row);
+        });
+    } catch (error) {
+        console.error("Failed to load users:", error);
+    }
+};
+
+const toggleInviteSelection = (user) => {
+    const alreadySelected = state.inviteSelections.some((entry) => entry.id === user.id);
+
+    if (alreadySelected) {
+        state.inviteSelections = state.inviteSelections.filter((entry) => entry.id !== user.id);
+    } else {
+        state.inviteSelections.push(user);
+    }
+
+    renderInviteUsers(elements.createConversationSearchInput.value.trim());
+};
+
 const handleCreateConversation = async () => {
     const conversationName = elements.createConversationNameInput.value.trim();
 
@@ -296,10 +367,12 @@ const handleCreateConversation = async () => {
         return;
     }
 
+    const invitedUsernames = state.inviteSelections.map((user) => user.name);
+
     closePopout();
 
     try {
-        await rest.createConversation(conversationName, []);
+        await rest.createConversation(conversationName, invitedUsernames);
         await loadConversations();
     } catch (error) {
         console.error("Failed to create conversation:", error);
@@ -360,9 +433,13 @@ const bindEvents = () => {
     elements.newConversationButton.addEventListener("click", openPopout);
     elements.createConversationCloseButton.addEventListener("click", closePopout);
     elements.createConversationButton.addEventListener("click", handleCreateConversation);
+    elements.createConversationSearchInput.addEventListener("input", async (event) => {
+        await renderInviteUsers(event.target.value.trim());
+    });
     elements.messageInput.addEventListener("keydown", handleMessageInputKeydown);
     elements.memberButton.addEventListener("click", () => toggleInfoPanel("members"));
     elements.infoButton.addEventListener("click", () => toggleInfoPanel("info"));
+    elements.inviteButton.addEventListener("click", openPopout);
 
     if (elements.logoutButton) {
         elements.logoutButton.addEventListener("click", logout);

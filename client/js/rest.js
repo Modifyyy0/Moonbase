@@ -72,6 +72,13 @@ export const rest = {
     },
 
 
+    // GET /api/users?q=...
+    async getUsers(query = "") {
+        const params = query ? `?q=${encodeURIComponent(query)}` : "";
+        return request(`/users${params}`);
+    },
+
+
     // DELETE /api/conversations/{conversation_id}/members/me
     async leaveConversation(conversationId) {
         return request(

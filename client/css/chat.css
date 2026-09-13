@@ -1,9 +1,9 @@
 @font-face {
-  font-family: 'Poppins';
-  src: url('../assets/fonts/Poppins/Poppins-Regular.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
+    font-family: 'Poppins';
+    src: url('../assets/fonts/Poppins/Poppins-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
 }
 
 * {
@@ -46,8 +46,9 @@ body {
     height: 90%;
     max-height: 90%;
 }
+
 #convo-head-status {
-    width: 150px ;
+    width: 150px;
     text-align: right;
     margin-left: 15px;
     margin-right: 15px;
@@ -63,7 +64,7 @@ body {
     color: #A6A6A6;
 }
 
-.date-line div{
+.date-line div {
     border-bottom: #4D4D4D 1px solid;
     width: calc((95% - 200px) / 2);
 }
@@ -74,6 +75,7 @@ body {
     width: 200px;
     text-align: center;
 }
+
 .date-line {
     display: flex;
     align-items: center;
@@ -96,7 +98,8 @@ body {
 #message-input {
     width: calc(100%);
     min-height: 30px;
-    field-sizing: content; /* stupid message vertical resizing bullshi*/
+    field-sizing: content;
+    /* stupid message vertical resizing bullshi*/
     resize: none;
     font-size: 20px;
     border-radius: 20px;
@@ -114,6 +117,7 @@ body {
     align-items: center;
     padding: 15px;
 }
+
 .message-pfp {
     border-radius: 50%;
     height: 50px;
@@ -143,6 +147,7 @@ body {
     height: 100vh;
     overflow: hidden;
 }
+
 #view {
     display: flex;
     height: 100%;
@@ -200,10 +205,10 @@ body {
 }
 
 #info-bar-members {
-    display: none;
+    display: block;
 }
 
-#info-bar-online{
+#info-bar-online {
     font-size: 20px;
     color: #7ED957;
 }
@@ -230,7 +235,7 @@ body {
 }
 
 #info-bar-info {
-    display: flex;
+    display: none;
     flex-direction: column;
     align-items: center;
     height: calc(100% - 100px);
@@ -247,12 +252,12 @@ body {
     margin-bottom: 20px;
 }
 
-#info-bar-convo-creation{
+#info-bar-convo-creation {
     color: #A6A6A6;
     font-size: 18px;
 }
 
-#info-bar-convo-join{
+#info-bar-convo-join {
     color: #A6A6A6;
     font-size: 18px;
 }
@@ -397,15 +402,15 @@ body {
     background-color: white;
 }
 
-.side-bar-convo .side-bar-convo-name{
+.side-bar-convo .side-bar-convo-name {
     transition: all ease-in-out 0.3s;
 }
 
-.side-bar-convo:hover .side-bar-convo-name{
+.side-bar-convo:hover .side-bar-convo-name {
     color: black;
 }
 
-.active{
+.active {
     color: black;
     background-color: white;
 }
@@ -523,10 +528,13 @@ body {
 
 #create-conversation-user-search {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    justify-content: flex-start;
     align-items: center;
     width: 100%;
     height: 100%;
+    overflow-y: auto;
+    padding-top: 10px;
 }
 
 #create-conversation-user-search p {
@@ -535,6 +543,42 @@ body {
     font-size: 26px;
     text-align: center;
     line-height: 25px;
+}
+
+.invite-user-row {
+    width: calc(100% - 50px);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all ease-in-out 0.2s;
+    color: white;
+}
+
+.invite-user-row:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.invite-user-circle {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: white;
+    background: transparent;
+}
+
+.invite-user-circle.selected {
+    background-color: #42a5f5;
+    border-color: #42a5f5;
+    color: black;
+    font-weight: 700;
 }
 
 #create-conversation-bottom-container {
