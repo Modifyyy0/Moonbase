@@ -34,11 +34,12 @@ const setPopoutVisibility = (isOpen) => {
 const openPopout = () => setPopoutVisibility(true);
 const closePopout = () => setPopoutVisibility(false);
 
-const formatTime = (date = new Date()) =>
-    new Date(date).toLocaleTimeString([], {
+const formatTime = (date = new Date()) => {
+    return new Date(date).toLocaleTimeString([], {
         hour: "numeric",
         minute: "2-digit",
     });
+}
 
 const createMessageBox = (user, time, content) => {
     const template = document.createElement("div");
@@ -141,7 +142,6 @@ const selectConversation = async (conversationId) => {
     }
 
     state.activeConversationId = validId;
-    currentConversationId = validId;
 
     try {
         const conversation = await rest.getConversation(validId);
@@ -275,9 +275,10 @@ const bindEvents = () => {
     }
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     bindEvents();
     ws.connect();
-    loadConversations();
+    await loadConversations();
+    await selectConversation(19);
 
 });
