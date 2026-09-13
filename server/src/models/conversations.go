@@ -11,6 +11,24 @@ type Conversation struct {
 	CreatedAt time.Time
 }
 
+type Member struct {
+	ID       int    `json:"id"`
+	Username string `json:"username"`
+	Online   bool   `json:"online"`
+}
+
+type ConversationDetails struct {
+	ID          int      `json:"id"`
+	Name        string   `json:"name"`
+	Members     []Member `json:"members"`
+	MemberCount int      `json:"membersCount"`
+}
+
+type CreateConversationRequest struct {
+	Members []string `json:"Members"`
+	Name    string   `json:"Name"`
+}
+
 func CreateConvo(name string) error {
 	_, err := db.DB.Exec(
 		"INSERT INTO conversations (name) VALUES (?)",
