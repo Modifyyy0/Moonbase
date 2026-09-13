@@ -83,6 +83,17 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cookie, err := r.Cookie("session_token")
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var currentUserID int
+
+	err = db.QueryRow(`SELECT users.id FROM sessions JOIN users ON users.username = sessions.username WHERE sessions.session_token = ?`, cookie.Value).Scan(&currentUserID)
+
 	result, err := db.Exec(`INSERT INTO conversations(name) VALUES (?)`, req.Name)
 
 	if err != nil {
@@ -91,6 +102,13 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conversationId, err := result.LastInsertId()
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Exec(`INSERT INTO user_in_conversation(user_id, conversation_id) VALUES (?, ?)`, currentUserID, conversationId)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -120,13 +138,24 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var memberCount int
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM user_in_conversation WHERE conversation_id = ?",
+		conversationId,
+	).Scan(&memberCount)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"conversation": map[string]interface{}{
-			"id":   conversationId,
-			"name": req.Name,
+			"id":          conversationId,
+			"name":        req.Name,
+			"memberCount": memberCount,
 		},
 	})
 
@@ -154,21 +183,26 @@ func JoinConvo(w http.ResponseWriter, r *http.Request) {
 	_, err = db.Exec("INSERT into user_in_conversation (user_id, conversation_id) VALUES (?, ?)", userId, convoID)
 
 	if err != nil {
-		http.Error(w, "something happend while inserting data into 'user_in_conversation' table", http.StatusInternalServerError)
+		http.Error(w, "The user is already in the conversation", http.StatusInternalServerError)
 		return
 	}
 
 	var conversation models.Conversation
 
-	err = db.QueryRow(
-		`SELECT conversation_id, name
-     FROM conversations
-     WHERE conversation_id = ?`,
-		convoID,
-	).Scan(&conversation.ID, &conversation.Name)
+	err = db.QueryRow(`SELECT id, name FROM conversations WHERE id = ?`, convoID).Scan(&conversation.ID, &conversation.Name)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(conversation)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"conversation": map[string]interface{}{
+			"id":   conversation.ID,
+			"name": conversation.Name,
+		},
+	})
 
 }
 
@@ -240,6 +274,16 @@ func ConvoInfo(w http.ResponseWriter, r *http.Request) {
 
 	if err := rows.Err(); err != nil {
 		http.Error(w, "Error while reading members", http.StatusInternalServerError)
+		return
+	}
+
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM user_in_conversation WHERE conversation_id = ?",
+		conversationID,
+	).Scan(&conversation.MemberCount)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

@@ -96,9 +96,19 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	query = "INSERT INTO sessions (username, session_token, createdAt) values (?, ?, ?)"
+	_, err = db.Exec(`INSERT INTO sessions (username, session_token, createdAt) values (?, ?, ?)`, UserIn, sessionID, time.Now())
 
-	_, err = db.Exec(query, UserIn, sessionID, time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = db.QueryRow(`SELECT id FROM users WHERE username = ?`, UserIn).Scan(&u.ID)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(u)
