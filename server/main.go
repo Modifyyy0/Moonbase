@@ -33,5 +33,5 @@ func main() {
 	http.HandleFunc("DELETE /conversations/{convoID}/members/leave", handlers.LeaveConvo)
 
 	fmt.Println("Server running at http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":6767", corsMiddleware(http.DefaultServeMux)))
 }
