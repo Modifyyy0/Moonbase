@@ -7,7 +7,25 @@ import (
 	"Moonbase/src/models"
 )
 
-var upgrader = websocket.Upgrader{}
+var upgrader = websocket.Upgrader{
+        CheckOrigin: func(r *http.Request) bool {
+        origin := r.Header.Get("Origin")
+        allowed := []string{
+            "http://localhost:5500",
+            "http://127.0.0.1:5500",
+            "http://localhost:3000",
+            "http://localhost:5173",
+        }
+
+        for _, o := range allowed {
+            if origin == o {
+                return true
+            }
+        }
+
+        return false
+    },
+}
 
 func CreateConnection(w http.ResponseWriter, r *http.Request) (*websocket.Conn, *models.User, error) {
 
