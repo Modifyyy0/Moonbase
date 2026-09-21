@@ -27,7 +27,7 @@ func HandleConversations(w http.ResponseWriter, r *http.Request) {
 func getUserConversation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	var userId int
+	var userID int
 
 	cookie, err := r.Cookie("session_token")
 
@@ -36,14 +36,24 @@ func getUserConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = db.QueryRow(`SELECT users.id FROM sessions JOIN users ON users.username = sessions.username WHERE sessions.session_token = ?`, cookie.Value).Scan(&userId)
+	err = db.QueryRow(`SELECT users.id FROM sessions JOIN users ON users.username = sessions.username WHERE sessions.session_token = ?`, cookie.Value).Scan(&userID)
 
 	if err != nil {
 		http.Error(w, "the user id was not obtained from the cookies in the db", http.StatusInternalServerError)
 		return
 	}
 
-	rows, err := db.Query(`SELECT conversations.name FROM user_in_conversation JOIN conversations ON user_in_conversation.conversation_id = conversations.id WHERE user_in_conversation.user_id = ?`, userId)
+	rows, err := db.Query(`
+		SELECT conversations.id, conversations.name, COUNT(all_members.user_id)
+		FROM user_in_conversation AS current_members
+		JOIN conversations
+			ON current_members.conversation_id = conversations.id
+		JOIN user_in_conversation AS all_members
+			ON all_members.conversation_id = conversations.id
+		WHERE current_members.user_id = ?
+		GROUP BY conversations.id, conversations.name
+		ORDER BY conversations.id
+	`, userID)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -52,19 +62,29 @@ func getUserConversation(w http.ResponseWriter, r *http.Request) {
 
 	defer rows.Close()
 
-	var conversations []string
+	type conversationSummary struct {
+		ID          int    `json:"id"`
+		Name        string `json:"name"`
+		MemberCount int    `json:"member_count"`
+	}
+
+	conversations := make([]conversationSummary, 0)
 
 	for rows.Next() {
-		var name string
+		var conversation conversationSummary
 
-		err := rows.Scan(&name)
+		err := rows.Scan(
+			&conversation.ID,
+			&conversation.Name,
+			&conversation.MemberCount,
+		)
 		if err != nil {
 			http.Error(w, "aint scan the conversation", http.StatusInternalServerError)
 			return
 
 		}
 
-		conversations = append(conversations, name)
+		conversations = append(conversations, conversation)
 	}
 
 	// w.Header().Set("Content-Type", "application/json")
@@ -236,12 +256,7 @@ func ConvoInfo(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(`
         SELECT
             users.id,
-            users.username,
-            EXISTS(
-                SELECT 1
-                FROM sessions
-                WHERE sessions.username = users.username
-            ) AS online
+            users.username
         FROM user_in_conversation
         JOIN users
             ON user_in_conversation.user_id = users.id
@@ -261,7 +276,6 @@ func ConvoInfo(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&member.ID,
 			&member.Username,
-			&member.Online,
 		)
 
 		if err != nil {
@@ -269,6 +283,7 @@ func ConvoInfo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		_, member.Online = manager.GetClient(member.ID)
 		conversation.Members = append(conversation.Members, member)
 	}
 
