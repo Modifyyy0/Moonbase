@@ -7,6 +7,8 @@ export class ChatWebSocket {
         // Functions registered by the UI.
         this.handlers = {
             new_message: [],
+            message_receipt: [],
+            typing: [],
             user_online: [],
             user_offline: [],
         };
@@ -112,6 +114,27 @@ export class ChatWebSocket {
                 content: content,
             },
         }));
+    }
+
+    markMessageRead(conversationId, messageId) {
+        this.send({
+            type: "message_read",
+            data: { conversation_id: conversationId, message_id: messageId },
+        });
+    }
+
+    sendTyping(conversationId, typing) {
+        this.send({
+            type: "typing",
+            data: { conversation_id: conversationId, typing },
+        });
+    }
+
+    send(payload) {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            return;
+        }
+        this.socket.send(JSON.stringify(payload));
     }
 
 

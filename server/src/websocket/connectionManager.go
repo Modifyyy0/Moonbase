@@ -17,6 +17,8 @@ const (
 	NewMessage OutgoingType = iota
 	UserOnline
 	UserOffline
+	MessageReceipt
+	Typing
 )
 
 type OutgoingMessage struct {
@@ -41,7 +43,23 @@ type IncomingMessage struct {
 	Data struct {
 		ConversationID int    `json:"conversation_id"`
 		Content        string `json:"content"`
+		MessageID      int    `json:"message_id"`
+		Typing         bool   `json:"typing"`
 	} `json:"data"`
+}
+
+type ReceiptData struct {
+	MessageID      int    `json:"message_id"`
+	ConversationID int    `json:"conversation_id"`
+	UserID         int    `json:"user_id"`
+	Status         string `json:"status"`
+}
+
+type TypingData struct {
+	ConversationID int    `json:"conversation_id"`
+	UserID         int    `json:"user_id"`
+	Username       string `json:"username"`
+	Typing         bool   `json:"typing"`
 }
 
 type PresenceData struct {
@@ -185,6 +203,34 @@ func WritePump(client *Client) {
 					log.Println("WriteJSON error:", err)
 					return
 				}
+
+			case MessageReceipt:
+				receipt, ok := message.Data.(ReceiptData)
+				if !ok {
+					log.Println("invalid data for MessageReceipt")
+					continue
+				}
+				if err := client.Conn.WriteJSON(struct {
+					Type string      `json:"type"`
+					Data ReceiptData `json:"data"`
+				}{Type: "message_receipt", Data: receipt}); err != nil {
+					log.Println("WriteJSON error:", err)
+					return
+				}
+
+			case Typing:
+				typing, ok := message.Data.(TypingData)
+				if !ok {
+					log.Println("invalid data for Typing")
+					continue
+				}
+				if err := client.Conn.WriteJSON(struct {
+					Type string     `json:"type"`
+					Data TypingData `json:"data"`
+				}{Type: "typing", Data: typing}); err != nil {
+					log.Println("WriteJSON error:", err)
+					return
+				}
 			}
 
 		case <-client.Done:
@@ -229,6 +275,10 @@ func ReadPump(client *Client, manager *ConnectionManager) {
 func ProcessMessage(client *Client, message IncomingMessage, manager *ConnectionManager) error {
 	switch message.Type {
 	case "send_message":
+		member, err := models.IsConversationMember(client.UserID, message.Data.ConversationID)
+		if err != nil || !member {
+			return fmt.Errorf("user is not a member of conversation")
+		}
 		newMessage, err := models.CreateMessage(
 			client.UserID,
 			message.Data.ConversationID,
@@ -236,6 +286,11 @@ func ProcessMessage(client *Client, message IncomingMessage, manager *Connection
 		)
 		if err != nil {
 			log.Println("ProcessMessage error:", err)
+			return err
+		}
+
+		err = models.CreateMessageReceipts(newMessage.ID, newMessage.ConversationID, client.UserID)
+		if err != nil {
 			return err
 		}
 
@@ -266,14 +321,76 @@ func ProcessMessage(client *Client, message IncomingMessage, manager *Connection
 			case <-targetClient.Done:
 				continue
 			}
+
+			if user.ID != client.UserID {
+				receipt, err := models.MarkMessageDelivered(newMessage.ID, user.ID)
+				if err != nil {
+					return err
+				}
+				sendReceiptToUser(manager, newMessage.UserID, receipt)
+			}
+		}
+
+	case "message_read":
+		member, err := models.IsConversationMember(client.UserID, message.Data.ConversationID)
+		if err != nil || !member {
+			return fmt.Errorf("user is not a member of conversation")
+		}
+		receipt, err := models.MarkMessageRead(message.Data.MessageID, client.UserID)
+		if err != nil {
+			return err
+		}
+		sendReceiptToUser(manager, messageOwner(receipt.MessageID), receipt)
+
+	case "typing":
+		member, err := models.IsConversationMember(client.UserID, message.Data.ConversationID)
+		if err != nil || !member {
+			return fmt.Errorf("user is not a member of conversation")
+		}
+		user, err := models.FindUserById(client.UserID)
+		if err != nil {
+			return err
+		}
+		users, err := models.FindAllUserFromConvoByID(message.Data.ConversationID)
+		if err != nil {
+			return err
+		}
+		data := TypingData{ConversationID: message.Data.ConversationID, UserID: client.UserID, Username: user.Name, Typing: message.Data.Typing}
+		for _, member := range users {
+			if member.ID == client.UserID {
+				continue
+			}
+			if target, ok := manager.GetClient(member.ID); ok {
+				target.Message <- OutgoingMessage{Type: Typing, Data: data}
+			}
 		}
 	}
 
 	return nil
 }
 
+func sendReceiptToUser(manager *ConnectionManager, userID int, receipt *models.Receipt) {
+	if receipt == nil {
+		return
+	}
+	if target, ok := manager.GetClient(userID); ok {
+		target.Message <- OutgoingMessage{Type: MessageReceipt, Data: ReceiptData{
+			MessageID: receipt.MessageID, ConversationID: receipt.ConversationID,
+			UserID: receipt.UserID, Status: receipt.Status,
+		}}
+	}
+}
+
+func messageOwner(messageID int) int {
+	message, err := models.FindMessageByID(messageID)
+	if err != nil {
+		return 0
+	}
+	return message.UserID
+}
+
 func SendUserOnline(client *Client, manager *ConnectionManager, username string) {
-	 fmt.Println("=== SendUserOnline START ===")
+	fmt.Println("=== SendUserOnline START ===")
 
 	conversations, err := models.FindAllConvoFromUserByID(client.UserID)
 	if err != nil {

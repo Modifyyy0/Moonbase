@@ -26,6 +26,7 @@ const elements = {
     infoBarOnline: document.getElementById("info-bar-online"),
     infoBarOffline: document.getElementById("info-bar-offline"),
     infoBarConvoName: document.getElementById("info-bar-convo-name"),
+    typingIndicator: document.getElementById("typing-indicator"),
 };
 
 const ws = new ChatWebSocket();
@@ -35,6 +36,9 @@ const state = {
     currentConversation: null,
     inviteSelections: [],
     inviteUsers: [],
+    currentUserId: 0,
+    typingUsers: new Map(),
+    typingTimer: null,
 };
 
 const setPopoutVisibility = (isOpen) => {
@@ -80,7 +84,7 @@ const formatTime = (date = new Date()) => {
     });
 }
 
-const createMessageBox = (user, time, content) => {
+const createMessageBox = (message) => {
     const template = document.createElement("div");
     template.innerHTML = `
         <div class="message-box">
@@ -89,6 +93,7 @@ const createMessageBox = (user, time, content) => {
                 <p class="message-box-user">
                     <span class="message-box-username"></span>
                     <span class="message-box-time"></span>
+                    <span class="message-box-status"></span>
                 </p>
                 <p class="message-content"></p>
             </div>
@@ -96,9 +101,14 @@ const createMessageBox = (user, time, content) => {
     `;
 
     const element = template.querySelector(".message-box");
-    element.querySelector(".message-box-username").textContent = user;
-    element.querySelector(".message-box-time").textContent = time;
-    element.querySelector(".message-content").textContent = content;
+    element.dataset.messageId = message.id ?? message.ID ?? "";
+    element.dataset.senderId = message.sender_id ?? message.UserID ?? "";
+    element.querySelector(".message-box-username").textContent = message.user ?? "unknown";
+    element.querySelector(".message-box-time").textContent = message.time;
+    element.querySelector(".message-content").textContent = message.content ?? "";
+    if (Number(element.dataset.senderId) === state.currentUserId) {
+        element.querySelector(".message-box-status").textContent = message.deliveryStatus ?? "sent";
+    }
 
     return element;
 };
@@ -222,7 +232,17 @@ const loadConversationMessages = async (conversationId) => {
             const username = message.sender_username ?? message.Username ?? "unknown";
             const content = message.content ?? message.Content ?? "";
             const sentAt = message.sent_time ?? message.SentAt ?? new Date();
-            addMessageToView(username, content, sentAt);
+            addMessageToView({
+                id: message.id ?? message.ID,
+                sender_id: message.sender_id ?? message.UserID,
+                user: username,
+                content,
+                time: formatTime(sentAt),
+                deliveryStatus: message.delivery_status ?? "sent",
+            });
+            if (message.id ?? message.ID) {
+                ws.markMessageRead(conversationId, message.id ?? message.ID);
+            }
             elements.convoContainer.scrollTo({
                 top: elements.convoContainer.scrollHeight,
                 behavior: "smooth"
@@ -279,9 +299,10 @@ const toggleInfoPanel = (selectedTab) => {
     elements.infoButton.classList.toggle("info-bar-select-selected", !isMembersSelected);
 };
 
-const addMessageToView = (user, content, sentAt = new Date()) => {
-    const time = formatTime(sentAt);
-    elements.convoContainer.appendChild(createMessageBox(user, time, content));
+const addMessageToView = (message) => {
+    const element = createMessageBox(message);
+    elements.convoContainer.appendChild(element);
+    return element;
 };
 
 const handleIncomingMessage = (message) => {
@@ -289,8 +310,46 @@ const handleIncomingMessage = (message) => {
         return;
     }
 
-    addMessageToView(message.sender_username || "unknown", message.content, message.sent_time || new Date());
+    const messageId = message.id ?? message.ID;
+    addMessageToView({
+        id: messageId,
+        sender_id: message.sender_id,
+        user: message.sender_username || "unknown",
+        content: message.content,
+        time: formatTime(message.sent_time || new Date()),
+        deliveryStatus: "sent",
+    });
+    if (messageId && Number(message.sender_id) !== state.currentUserId) {
+        ws.markMessageRead(state.activeConversationId, messageId);
+    }
     elements.convoContainer.scrollTop = elements.convoContainer.scrollHeight;
+};
+
+const handleReceipt = (receipt) => {
+    if (!receipt || Number(receipt.conversation_id) !== state.activeConversationId) {
+        return;
+    }
+    const message = elements.convoContainer.querySelector(`[data-message-id="${receipt.message_id}"]`);
+    if (message && Number(message.dataset.senderId) === state.currentUserId) {
+        message.querySelector(".message-box-status").textContent = receipt.status;
+    }
+};
+
+const renderTypingIndicator = () => {
+    const names = [...state.typingUsers.values()];
+    elements.typingIndicator.textContent = names.length ? `${names.join(", ")} typing...` : "";
+};
+
+const handleTyping = (data) => {
+    if (!data || Number(data.conversation_id) !== state.activeConversationId || Number(data.user_id) === state.currentUserId) {
+        return;
+    }
+    if (data.typing) {
+        state.typingUsers.set(data.user_id, data.username || "Someone");
+    } else {
+        state.typingUsers.delete(data.user_id);
+    }
+    renderTypingIndicator();
 };
 
 const handlePresenceUpdate = (type, data) => {
@@ -410,11 +469,30 @@ const handleMessageInputKeydown = (event) => {
 
         sendMessage(content);
         elements.messageInput.value = "";
+        stopTyping();
     }
 
     if (event.key === "Enter" && event.ctrlKey) {
         elements.messageInput.value += "\n";
     }
+};
+
+const stopTyping = () => {
+    if (state.typingTimer) {
+        clearTimeout(state.typingTimer);
+    }
+    if (state.activeConversationId) {
+        ws.sendTyping(state.activeConversationId, false);
+    }
+};
+
+const handleTypingInput = () => {
+    if (!state.activeConversationId) {
+        return;
+    }
+    ws.sendTyping(state.activeConversationId, true);
+    clearTimeout(state.typingTimer);
+    state.typingTimer = setTimeout(stopTyping, 1200);
 };
 
 const logout = async () => {
@@ -447,6 +525,8 @@ const handleLeaveConversation = async () => {
 
 const bindEvents = () => {
     ws.on("new_message", handleIncomingMessage);
+    ws.on("message_receipt", handleReceipt);
+    ws.on("typing", handleTyping);
     ws.on("user_online", (data) => handlePresenceUpdate("user_online", data));
     ws.on("user_offline", (data) => handlePresenceUpdate("user_offline", data));
 
@@ -458,6 +538,8 @@ const bindEvents = () => {
         await renderInviteUsers(event.target.value.trim());
     });
     elements.messageInput.addEventListener("keydown", handleMessageInputKeydown);
+    elements.messageInput.addEventListener("input", handleTypingInput);
+    elements.messageInput.addEventListener("blur", stopTyping);
     elements.memberButton.addEventListener("click", () => toggleInfoPanel("members"));
     elements.infoButton.addEventListener("click", () => toggleInfoPanel("info"));
     elements.inviteButton.addEventListener("click", openPopout);
@@ -475,5 +557,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     bindEvents();
     updateConversationTypeControls();
     ws.connect();
+    try {
+        const user = await rest.getMe();
+        state.currentUserId = Number(user?.id ?? user?.ID ?? 0);
+    } catch (error) {
+        console.error("Failed to load current user:", error);
+    }
     await loadConversations();
 });

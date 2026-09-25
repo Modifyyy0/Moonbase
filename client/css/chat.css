@@ -690,3 +690,19 @@ body {
 #create-conversation-name:disabled {
     opacity: 0.5;
 }
+
+.message-box-status {
+    color: #7ED957;
+    font-size: 13px;
+    margin-left: 8px;
+    text-transform: capitalize;
+}
+
+#typing-indicator {
+    position: absolute;
+    bottom: 58px;
+    left: 20px;
+    height: 20px;
+    color: #A6A6A6;
+    font-size: 14px;
+}
