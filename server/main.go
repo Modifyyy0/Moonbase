@@ -61,9 +61,18 @@ func main() {
 	http.HandleFunc("POST /api/join/{convoID}", handlers.JoinConvo)
 
 	http.HandleFunc("DELETE /api/deleteUser", handlers.DeleteUser)
-	
+
 	http.HandleFunc("/ws", handlers.HandleWebsocket)
 
+	clientFiles := http.FileServer(http.Dir("../client"))
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/login.html", http.StatusFound)
+			return
+		}
+		clientFiles.ServeHTTP(w, r)
+	})
+
 	fmt.Println("Server running at http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", corsMiddleware(http.DefaultServeMux)))
+	log.Fatal(http.ListenAndServe(":6767", corsMiddleware(http.DefaultServeMux)))
 }

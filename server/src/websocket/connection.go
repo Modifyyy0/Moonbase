@@ -23,7 +23,7 @@ var upgrader = websocket.Upgrader{
             }
         }
 
-        return false
+        return true
     },
 }
 

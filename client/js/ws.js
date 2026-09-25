@@ -33,12 +33,11 @@ export class ChatWebSocket {
                 ? "wss:"
                 : "ws:";
 
-        const host = "localhost:6767";
-        const wsUrl = `${protocol}//${host}/ws`;
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
 
         this.socket = new WebSocket(wsUrl);
 
-        
+
         this.socket.addEventListener("close", (event) => {
             console.log("WebSocket disconnected");
 
