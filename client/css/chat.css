@@ -117,6 +117,11 @@ body {
     padding-right: 10px;
     background: none;
     border: #4D4D4D 2px solid;
+    outline: none;
+}
+
+#message-input:focus {
+    border: white 2px solid;
 }
 
 .message-box {
@@ -465,7 +470,7 @@ body {
     flex-direction: column;
     align-items: center;
     height: 50%;
-    width: 40%;
+    width: 50%;
     min-width: 650px;
     background-color: black;
 }
@@ -527,7 +532,7 @@ body {
 
 #create-conversation-middle-container input {
     width: calc(100% - 50px);
-    margin: 15px 20px;
+    margin: 5px 15px;
     font-size: 18px;
     color: white;
     background-color: black;
@@ -535,6 +540,11 @@ body {
     border-radius: 26px;
     padding: 5px 10px;
     margin-bottom: 0;
+    outline: none;
+}
+
+#create-conversation-middle-container input:focus {
+    border: white solid 2px;
 }
 
 #create-conversation-user-search {
@@ -546,6 +556,11 @@ body {
     width: 100%;
     height: 100%;
     overflow-y: auto;
+    scrollbar-width: none;
+}
+
+#create-conversation-user-search::-webkit-scrollbar{
+    display: none;
 }
 
 #create-conversation-user-search p {
@@ -619,6 +634,12 @@ body {
     height: 35px;
     margin-left: 15px;
     margin-right: 15px;
+    outline: none;
+
+}
+
+#create-conversation-bottom-container input:focus {
+    border: white solid 2px;
 }
 
 #create-conversation-bottom-container button {
@@ -676,15 +697,26 @@ body {
     color: black;
 }
 
+#create-conversation-type-container {
+    width: calc(100% - 30px);
+    border-radius: 26px;
+    border: #4d4d4d solid 2px;
+    background-color: black;
+    margin: 15px 15px 0;
+}
+
 #create-conversation-type {
-    width: calc(100% - 50px);
-    margin: 15px 20px 0;
-    padding: 7px 10px;
+    width: calc(100% - 20px);
+    padding: 0px 0px;
     font-size: 18px;
     color: white;
     background-color: black;
-    border: #4d4d4d solid 2px;
-    border-radius: 26px;
+    outline: none;
+    border: none;
+    border-radius: 1px;
+    margin-left: 18px;
+    margin: 7px;
+    margin-left: 7px;
 }
 
 #create-conversation-name:disabled {
