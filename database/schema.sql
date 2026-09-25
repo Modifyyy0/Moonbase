@@ -11,6 +11,7 @@ CREATE TABLE users (
 CREATE TABLE conversations (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name varchar(100),
+    conversation_type ENUM('direct', 'group') NOT NULL DEFAULT 'group',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

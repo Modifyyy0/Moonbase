@@ -8,7 +8,8 @@ const elements = {
     inviteButton: document.getElementById("invite-button"),
     createConversationCloseButton: document.querySelector("#create-conversation-top-container button"),
     createConversationSearchInput: document.querySelector("#create-conversation-middle-container input"),
-    createConversationNameInput: document.querySelector("#create-conversation-bottom-container input"),
+    createConversationType: document.getElementById("create-conversation-type"),
+    createConversationNameInput: document.getElementById("create-conversation-name"),
     createConversationButton: document.querySelector("#create-conversation-bottom-container button"),
     inviteUserSearch: document.getElementById("create-conversation-user-search"),
     conversationList: document.getElementById("side-bar-list"),
@@ -58,7 +59,16 @@ const closePopout = () => {
     state.inviteSelections = [];
     elements.createConversationSearchInput.value = "";
     elements.createConversationNameInput.value = "";
+    elements.createConversationType.value = "group";
     setPopoutVisibility(false);
+};
+
+const updateConversationTypeControls = () => {
+    const isDirect = elements.createConversationType.value === "direct";
+    elements.createConversationNameInput.disabled = isDirect;
+    elements.createConversationNameInput.placeholder = isDirect
+        ? "Name is taken from the other person"
+        : "Group conversation name";
 };
 
 const formatTime = (date = new Date()) => {
@@ -108,9 +118,12 @@ const createSidebarConversation = (convo, { selected = false } = {}) => {
     const conversation = template.querySelector(".side-bar-convo");
     const name = convo?.name ?? convo?.Name ?? "Conversation";
     const memberCount = Number(convo?.member_count ?? convo?.members?.length ?? 1);
+    const conversationType = convo?.type ?? convo?.conversation_type;
 
     conversation.querySelector(".side-bar-convo-name").textContent = name;
-    conversation.querySelector(".side-bar-convo-members").textContent = `${memberCount} members`;
+    conversation.querySelector(".side-bar-convo-members").textContent = conversationType === "direct"
+        ? "1:1 conversation"
+        : `${memberCount} members`;
 
     if (selected) {
         conversation.classList.add("active");
@@ -362,18 +375,24 @@ const toggleInviteSelection = (user) => {
 };
 
 const handleCreateConversation = async () => {
+    const conversationType = elements.createConversationType.value;
     const conversationName = elements.createConversationNameInput.value.trim();
 
-    if (!conversationName) {
+    const invitedUsernames = state.inviteSelections.map((user) => user.name);
+
+    if (conversationType === "direct" && invitedUsernames.length !== 1) {
+        window.alert("Choose exactly one person for a 1:1 conversation.");
         return;
     }
-
-    const invitedUsernames = state.inviteSelections.map((user) => user.name);
+    if (conversationType === "group" && (invitedUsernames.length < 2 || !conversationName)) {
+        window.alert("Choose at least two people and enter a group name.");
+        return;
+    }
 
     closePopout();
 
     try {
-        await rest.createConversation(conversationName, invitedUsernames);
+        await rest.createConversation(conversationName, invitedUsernames, conversationType);
         await loadConversations();
     } catch (error) {
         console.error("Failed to create conversation:", error);
@@ -434,6 +453,7 @@ const bindEvents = () => {
     elements.newConversationButton.addEventListener("click", openPopout);
     elements.createConversationCloseButton.addEventListener("click", closePopout);
     elements.createConversationButton.addEventListener("click", handleCreateConversation);
+    elements.createConversationType.addEventListener("change", updateConversationTypeControls);
     elements.createConversationSearchInput.addEventListener("input", async (event) => {
         await renderInviteUsers(event.target.value.trim());
     });
@@ -453,6 +473,7 @@ const bindEvents = () => {
 
 document.addEventListener("DOMContentLoaded", async () => {
     bindEvents();
+    updateConversationTypeControls();
     ws.connect();
     await loadConversations();
 });

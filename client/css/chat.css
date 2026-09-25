@@ -45,14 +45,16 @@ body {
     width: 100%;
     overflow-y: scroll;
     overflow-x: hidden;
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
     height: 90%;
     max-height: 90%;
 }
 
 #convo-container::-webkit-scrollbar {
-  display: none;
+    display: none;
 }
 
 #convo-head-status {
@@ -672,4 +674,19 @@ body {
 #logout-button:hover {
     background-color: #FF5757;
     color: black;
+}
+
+#create-conversation-type {
+    width: calc(100% - 50px);
+    margin: 15px 20px 0;
+    padding: 7px 10px;
+    font-size: 18px;
+    color: white;
+    background-color: black;
+    border: #4d4d4d solid 2px;
+    border-radius: 26px;
+}
+
+#create-conversation-name:disabled {
+    opacity: 0.5;
 }

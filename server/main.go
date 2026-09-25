@@ -73,6 +73,6 @@ func main() {
 		clientFiles.ServeHTTP(w, r)
 	})
 
-	fmt.Println("Server running at http://localhost:8080")
+	fmt.Println("Server running at http://localhost:6767")
 	log.Fatal(http.ListenAndServe(":6767", corsMiddleware(http.DefaultServeMux)))
 }

@@ -33,7 +33,7 @@ func RemoveUserFromConversation(userID, conversationID int) error {
 
 func FindAllConvoFromUserByID(userID int) ([]Conversation, error) {
 	query := `
-		SELECT c.id, c.name, c.created_at
+		SELECT c.id, c.name, c.conversation_type, c.created_at
 		FROM conversations c
 		JOIN user_in_conversation uic
 			ON c.id = uic.conversation_id
@@ -54,6 +54,7 @@ func FindAllConvoFromUserByID(userID int) ([]Conversation, error) {
 		err := rows.Scan(
 			&convo.ID,
 			&convo.Name,
+			&convo.ConversationType,
 			&convo.CreatedAt,
 		)
 

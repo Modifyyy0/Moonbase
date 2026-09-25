@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 
@@ -44,14 +45,14 @@ func getUserConversation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := db.Query(`
-		SELECT conversations.id, conversations.name, COUNT(all_members.user_id)
+		SELECT conversations.id, conversations.name, conversations.conversation_type, COUNT(all_members.user_id)
 		FROM user_in_conversation AS current_members
 		JOIN conversations
 			ON current_members.conversation_id = conversations.id
 		JOIN user_in_conversation AS all_members
 			ON all_members.conversation_id = conversations.id
 		WHERE current_members.user_id = ?
-		GROUP BY conversations.id, conversations.name
+		GROUP BY conversations.id, conversations.name, conversations.conversation_type
 		ORDER BY conversations.id
 	`, userID)
 
@@ -63,9 +64,10 @@ func getUserConversation(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type conversationSummary struct {
-		ID          int    `json:"id"`
-		Name        string `json:"name"`
-		MemberCount int    `json:"member_count"`
+		ID               int    `json:"id"`
+		Name             string `json:"name"`
+		ConversationType string `json:"type"`
+		MemberCount      int    `json:"member_count"`
 	}
 
 	conversations := make([]conversationSummary, 0)
@@ -76,6 +78,7 @@ func getUserConversation(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&conversation.ID,
 			&conversation.Name,
+			&conversation.ConversationType,
 			&conversation.MemberCount,
 		)
 		if err != nil {
@@ -99,7 +102,34 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Invalid conversation request", http.StatusBadRequest)
+		return
+	}
+
+	conversationType := strings.ToLower(strings.TrimSpace(req.Type))
+	if conversationType == "" {
+		conversationType = "group"
+	}
+	if conversationType != "direct" && conversationType != "group" {
+		http.Error(w, "Conversation type must be direct or group", http.StatusBadRequest)
+		return
+	}
+
+	uniqueMembers := make([]string, 0, len(req.Members))
+	seenMembers := make(map[string]bool)
+	for _, username := range req.Members {
+		username = strings.TrimSpace(username)
+		if username != "" && !seenMembers[username] {
+			seenMembers[username] = true
+			uniqueMembers = append(uniqueMembers, username)
+		}
+	}
+	if conversationType == "direct" && len(uniqueMembers) != 1 {
+		http.Error(w, "A direct conversation must have exactly one other member", http.StatusBadRequest)
+		return
+	}
+	if conversationType == "group" && len(uniqueMembers) < 2 {
+		http.Error(w, "A group conversation must have at least two other members", http.StatusBadRequest)
 		return
 	}
 
@@ -113,8 +143,72 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 	var currentUserID int
 
 	err = db.QueryRow(`SELECT users.id FROM sessions JOIN users ON users.username = sessions.username WHERE sessions.session_token = ?`, cookie.Value).Scan(&currentUserID)
+	if err != nil {
+		http.Error(w, "Invalid session", http.StatusUnauthorized)
+		return
+	}
 
-	result, err := db.Exec(`INSERT INTO conversations(name) VALUES (?)`, req.Name)
+	tx, err := db.DB.Begin()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	memberIDs := make([]int, 0, len(uniqueMembers))
+	for _, username := range uniqueMembers {
+		var userID int
+		if err := tx.QueryRow(`SELECT id FROM users WHERE username = ?`, username).Scan(&userID); err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "One or more selected users do not exist", http.StatusBadRequest)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if userID == currentUserID {
+			http.Error(w, "You cannot add yourself as another member", http.StatusBadRequest)
+			return
+		}
+		memberIDs = append(memberIDs, userID)
+	}
+
+	if conversationType == "direct" {
+		var existingID int
+		var existingName string
+		err = tx.QueryRow(`
+			SELECT c.id, c.name
+			FROM conversations AS c
+			JOIN user_in_conversation AS members ON members.conversation_id = c.id
+			WHERE c.conversation_type = 'direct'
+			  AND members.user_id IN (?, ?)
+			GROUP BY c.id, c.name
+			HAVING COUNT(DISTINCT members.user_id) = 2
+			   AND (SELECT COUNT(*) FROM user_in_conversation WHERE conversation_id = c.id) = 2
+		`, currentUserID, memberIDs[0]).Scan(&existingID, &existingName)
+		if err == nil {
+			if err := tx.Commit(); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			writeConversationCreated(w, http.StatusOK, int64(existingID), existingName, "direct", 2)
+			return
+		}
+		if err != sql.ErrNoRows {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	conversationName := strings.TrimSpace(req.Name)
+	if conversationType == "direct" {
+		conversationName = uniqueMembers[0]
+	} else if conversationName == "" {
+		http.Error(w, "A group conversation needs a name", http.StatusBadRequest)
+		return
+	}
+
+	result, err := tx.Exec(`INSERT INTO conversations(name, conversation_type) VALUES (?, ?)`, conversationName, conversationType)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -128,24 +222,15 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(`INSERT INTO user_in_conversation(user_id, conversation_id) VALUES (?, ?)`, currentUserID, conversationId)
+	_, err = tx.Exec(`INSERT INTO user_in_conversation(user_id, conversation_id) VALUES (?, ?)`, currentUserID, conversationId)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	for _, username := range req.Members {
-		var userID int
-
-		err := db.QueryRow(`SELECT id FROM users WHERE username = ?`, username).Scan(&userID)
-
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		_, err = db.Exec(
+	for _, userID := range memberIDs {
+		_, err = tx.Exec(
 			`INSERT INTO user_in_conversation(user_id, conversation_id)
 			VALUES (?, ?)`,
 			userID,
@@ -159,7 +244,7 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var memberCount int
-	err = db.QueryRow(
+	err = tx.QueryRow(
 		"SELECT COUNT(*) FROM user_in_conversation WHERE conversation_id = ?",
 		conversationId,
 	).Scan(&memberCount)
@@ -167,18 +252,26 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
+	writeConversationCreated(w, http.StatusCreated, conversationId, conversationName, conversationType, memberCount)
+
+}
+
+func writeConversationCreated(w http.ResponseWriter, status int, id int64, name, conversationType string, memberCount int) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-
+	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"conversation": map[string]interface{}{
-			"id":          conversationId,
-			"name":        req.Name,
+			"id":          id,
+			"name":        name,
+			"type":        conversationType,
 			"memberCount": memberCount,
 		},
 	})
-
 }
 
 func JoinConvo(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +302,7 @@ func JoinConvo(w http.ResponseWriter, r *http.Request) {
 
 	var conversation models.Conversation
 
-	err = db.QueryRow(`SELECT id, name FROM conversations WHERE id = ?`, convoID).Scan(&conversation.ID, &conversation.Name)
+	err = db.QueryRow(`SELECT id, name, conversation_type FROM conversations WHERE id = ?`, convoID).Scan(&conversation.ID, &conversation.Name, &conversation.ConversationType)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -221,6 +314,7 @@ func JoinConvo(w http.ResponseWriter, r *http.Request) {
 		"conversation": map[string]interface{}{
 			"id":   conversation.ID,
 			"name": conversation.Name,
+			"type": conversation.ConversationType,
 		},
 	})
 
@@ -239,9 +333,9 @@ func ConvoInfo(w http.ResponseWriter, r *http.Request) {
 	var conversation models.ConversationDetails
 
 	err = db.QueryRow(
-		"SELECT id, name FROM conversations WHERE id = ?",
+		"SELECT id, name, conversation_type FROM conversations WHERE id = ?",
 		conversationID,
-	).Scan(&conversation.ID, &conversation.Name)
+	).Scan(&conversation.ID, &conversation.Name, &conversation.ConversationType)
 
 	if err != nil {
 		if err == sql.ErrNoRows {

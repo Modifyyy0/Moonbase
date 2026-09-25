@@ -6,9 +6,10 @@ import (
 )
 
 type Conversation struct {
-	ID        int
-	Name      string
-	CreatedAt time.Time
+	ID               int
+	Name             string
+	ConversationType string
+	CreatedAt        time.Time
 }
 
 type Member struct {
@@ -18,20 +19,22 @@ type Member struct {
 }
 
 type ConversationDetails struct {
-	ID          int      `json:"id"`
-	Name        string   `json:"name"`
-	Members     []Member `json:"members"`
-	MemberCount int      `json:"membersCount"`
+	ID               int      `json:"id"`
+	Name             string   `json:"name"`
+	ConversationType string   `json:"type"`
+	Members          []Member `json:"members"`
+	MemberCount      int      `json:"membersCount"`
 }
 
 type CreateConversationRequest struct {
-	Members []string `json:"Members"`
-	Name    string   `json:"Name"`
+	Members []string `json:"members"`
+	Name    string   `json:"name"`
+	Type    string   `json:"type"`
 }
 
 func CreateConvo(name string) error {
 	_, err := db.DB.Exec(
-		"INSERT INTO conversations (name) VALUES (?)",
+		"INSERT INTO conversations (name, conversation_type) VALUES (?, 'group')",
 		name,
 	)
 
@@ -51,12 +54,12 @@ func FindConvoById(id int) (*Conversation, error) {
 	convo := &Conversation{}
 
 	query := `
-		SELECT id, name, created_at
+		SELECT id, name, conversation_type, created_at
 		FROM conversations
 		WHERE id = ?
 	`
 
-	err := db.DB.QueryRow(query, id).Scan(&convo.ID, &convo.Name, &convo.CreatedAt)
+	err := db.DB.QueryRow(query, id).Scan(&convo.ID, &convo.Name, &convo.ConversationType, &convo.CreatedAt)
 
 	if err != nil {
 		return nil, err
@@ -67,7 +70,7 @@ func FindConvoById(id int) (*Conversation, error) {
 
 func FindConvoByName(name string) ([]Conversation, error) {
 	query := `
-		SELECT id, name, created_at
+		SELECT id, name, conversation_type, created_at
 		FROM conversations
 		WHERE name = ?
 	`
@@ -86,6 +89,7 @@ func FindConvoByName(name string) ([]Conversation, error) {
 		err := rows.Scan(
 			&convo.ID,
 			&convo.Name,
+			&convo.ConversationType,
 			&convo.CreatedAt,
 		)
 

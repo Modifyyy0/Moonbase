@@ -57,6 +57,27 @@ func Connect() error {
 		return err
 	}
 
+	// Keep databases created before conversation types were introduced usable.
+	var hasConversationType int
+	err = DB.QueryRow(`
+		SELECT COUNT(*)
+		FROM information_schema.columns
+		WHERE table_schema = DATABASE()
+		  AND table_name = 'conversations'
+		  AND column_name = 'conversation_type'
+	`).Scan(&hasConversationType)
+	if err != nil {
+		return err
+	}
+	if hasConversationType == 0 {
+		if _, err = DB.Exec(`
+			ALTER TABLE conversations
+			ADD COLUMN conversation_type ENUM('direct', 'group') NOT NULL DEFAULT 'group'
+		`); err != nil {
+			return err
+		}
+	}
+
 	fmt.Println("Connected")
 	return nil
 }

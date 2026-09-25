@@ -58,10 +58,10 @@ export const rest = {
 
 
     // POST /api/conversations
-    async createConversation(Name, members) {
+    async createConversation(name, members, type) {
         return request("/conversations", {
             method: "POST",
-            body: JSON.stringify({ Name, members }),
+            body: JSON.stringify({ name, members, type }),
         });
     },
 
