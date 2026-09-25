@@ -49,8 +49,8 @@ body {
     /* IE and Edge */
     scrollbar-width: none;
     /* Firefox */
-    height: 90%;
-    max-height: 90%;
+    height: 85%;
+    max-height: 85%;
 }
 
 #convo-container::-webkit-scrollbar {
@@ -703,6 +703,9 @@ body {
     bottom: 58px;
     left: 20px;
     height: 20px;
+    width: 85%;
     color: #A6A6A6;
     font-size: 14px;
+    z-index: 10;
+    background-color: black;
 }

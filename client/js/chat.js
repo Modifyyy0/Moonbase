@@ -256,6 +256,8 @@ const loadConversationMessages = async (conversationId) => {
 const selectConversation = async (conversationId) => {
     const validId = Number(conversationId);
     state.activeConversationId = validId;
+    state.typingUsers.clear();
+    renderTypingIndicator();
     if (!validId) {
         renderConversations([])
         populateConversationHeader({})
@@ -346,6 +348,10 @@ const handleTyping = (data) => {
     }
     if (data.typing) {
         state.typingUsers.set(data.user_id, data.username || "Someone");
+        window.setTimeout(() => {
+            state.typingUsers.delete(data.user_id);
+            renderTypingIndicator();
+        }, 2500);
     } else {
         state.typingUsers.delete(data.user_id);
     }
@@ -488,6 +494,10 @@ const stopTyping = () => {
 
 const handleTypingInput = () => {
     if (!state.activeConversationId) {
+        return;
+    }
+    if (!elements.messageInput.value.trim()) {
+        stopTyping();
         return;
     }
     ws.sendTyping(state.activeConversationId, true);
