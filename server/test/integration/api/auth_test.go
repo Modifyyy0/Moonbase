@@ -2873,3 +2873,430 @@ func TestIT_API_022_LeaveConversationAsNonMember(t *testing.T) {
 		conversationID,
 	)
 }
+
+func TestIT_API_023_GetConversationMessages(t *testing.T) {
+	database := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf(
+		"test_IT-API-023_Alice_%d",
+		time.Now().UnixNano(),
+	)
+	bob := fmt.Sprintf(
+		"test_IT-API-023_Bob_%d",
+		time.Now().UnixNano(),
+	)
+
+	// Create users.
+	_, err := database.Exec(
+		"INSERT INTO users (username) VALUES (?), (?)",
+		alice,
+		bob,
+	)
+	if err != nil {
+		t.Fatalf("failed to create users: %v", err)
+	}
+
+	// Get user IDs.
+	var aliceID, bobID int
+
+	err = database.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		alice,
+	).Scan(&aliceID)
+	if err != nil {
+		t.Fatalf("failed to get Alice's ID: %v", err)
+	}
+
+	err = database.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		bob,
+	).Scan(&bobID)
+	if err != nil {
+		t.Fatalf("failed to get Bob's ID: %v", err)
+	}
+
+	// Create the conversation we will request.
+	result, err := database.Exec(
+		`INSERT INTO conversations (name, conversation_type)
+		 VALUES (?, ?)`,
+		"IT-API-023 Message Test",
+		"group",
+	)
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+
+	conversationID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get conversation ID: %v", err)
+	}
+
+	// Add Alice and Bob.
+	_, err = database.Exec(
+		`INSERT INTO user_in_conversation
+			(user_id, conversation_id)
+		 VALUES (?, ?), (?, ?)`,
+		aliceID,
+		conversationID,
+		bobID,
+		conversationID,
+	)
+	if err != nil {
+		t.Fatalf("failed to add conversation members: %v", err)
+	}
+
+	// Create two messages in the requested conversation.
+	message1, err := database.Exec(
+		`INSERT INTO messages
+			(user_id, conversation_id, content)
+		 VALUES (?, ?, ?)`,
+		aliceID,
+		conversationID,
+		"Hello Bob",
+	)
+	if err != nil {
+		t.Fatalf("failed to create first message: %v", err)
+	}
+
+	message1ID, err := message1.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get first message ID: %v", err)
+	}
+
+	message2, err := database.Exec(
+		`INSERT INTO messages
+			(user_id, conversation_id, content)
+		 VALUES (?, ?, ?)`,
+		bobID,
+		conversationID,
+		"Hello Alice",
+	)
+	if err != nil {
+		t.Fatalf("failed to create second message: %v", err)
+	}
+
+	message2ID, err := message2.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get second message ID: %v", err)
+	}
+
+	// Create an unrelated conversation and message.
+	result, err = database.Exec(
+		`INSERT INTO conversations (name, conversation_type)
+		 VALUES (?, ?)`,
+		"IT-API-023 Unrelated Conversation",
+		"group",
+	)
+	if err != nil {
+		t.Fatalf("failed to create unrelated conversation: %v", err)
+	}
+
+	unrelatedConversationID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get unrelated conversation ID: %v", err)
+	}
+
+	_, err = database.Exec(
+		`INSERT INTO messages
+			(user_id, conversation_id, content)
+		 VALUES (?, ?, ?)`,
+		aliceID,
+		unrelatedConversationID,
+		"This should not be returned",
+	)
+	if err != nil {
+		t.Fatalf("failed to create unrelated message: %v", err)
+	}
+
+	// Log Alice in.
+	loginBody := fmt.Sprintf(
+		`{"username":%q}`,
+		alice,
+	)
+
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(loginBody),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusOK &&
+		loginRecorder.Code != http.StatusCreated {
+		t.Fatalf(
+			"expected login to return 200 or 201, got %d. Body: %s",
+			loginRecorder.Code,
+			loginRecorder.Body.String(),
+		)
+	}
+
+	// Get Alice's session cookie.
+	var sessionCookie *http.Cookie
+
+	for _, cookie := range loginRecorder.Result().Cookies() {
+		if cookie.Name == "session_token" {
+			sessionCookie = cookie
+			break
+		}
+	}
+
+	if sessionCookie == nil {
+		t.Fatal("expected login to create session_token cookie")
+	}
+
+	// Request messages.
+	req := httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf(
+			"/api/conversations/%d/messages",
+			conversationID,
+		),
+		nil,
+	)
+
+	req.AddCookie(sessionCookie)
+
+	req.SetPathValue(
+		"convoID",
+		fmt.Sprintf("%d", conversationID),
+	)
+
+	recorder := httptest.NewRecorder()
+
+	handlers.GetMessages(recorder, req)
+
+	// Verify status.
+	if recorder.Code != http.StatusOK {
+		t.Fatalf(
+			"expected HTTP 200, got %d. Body: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+
+	// Decode response.
+	var messages []struct {
+	ID             int    `json:"ID"`
+	UserID         int    `json:"UserID"`
+	Username       string `json:"Username"`
+	ConversationID int    `json:"ConversationID"`
+	Content        string `json:"Content"`
+	SentAt         string `json:"SentAt"`
+	DeliveryStatus string `json:"delivery_status"`
+}
+
+	err = json.NewDecoder(recorder.Body).Decode(&messages)
+	if err != nil {
+		t.Fatalf(
+			"failed to decode response JSON: %v. Body: %s",
+			err,
+			recorder.Body.String(),
+		)
+	}
+
+	// We expect exactly the two messages from this conversation.
+	if len(messages) != 2 {
+		t.Fatalf(
+			"expected 2 messages, got %d",
+			len(messages),
+		)
+	}
+
+	// Verify first message.
+	var foundMessage1 bool
+	var foundMessage2 bool
+
+	for _, message := range messages {
+		if message.ID == int(message1ID) {
+			foundMessage1 = true
+
+			if message.UserID != aliceID {
+				t.Errorf(
+					"message %d: expected user ID %d, got %d",
+					message.ID,
+					aliceID,
+					message.UserID,
+				)
+			}
+
+			if message.ConversationID != int(conversationID) {
+				t.Errorf(
+					"message %d: expected conversation ID %d, got %d",
+					message.ID,
+					conversationID,
+					message.ConversationID,
+				)
+			}
+
+			if message.Content != "Hello Bob" {
+				t.Errorf(
+					"message %d: expected content %q, got %q",
+					message.ID,
+					"Hello Bob",
+					message.Content,
+				)
+			}
+		}
+
+		if message.ID == int(message2ID) {
+			foundMessage2 = true
+
+			if message.UserID != bobID {
+				t.Errorf(
+					"message %d: expected user ID %d, got %d",
+					message.ID,
+					bobID,
+					message.UserID,
+				)
+			}
+
+			if message.ConversationID != int(conversationID) {
+				t.Errorf(
+					"message %d: expected conversation ID %d, got %d",
+					message.ID,
+					conversationID,
+					message.ConversationID,
+				)
+			}
+
+			if message.Content != "Hello Alice" {
+				t.Errorf(
+					"message %d: expected content %q, got %q",
+					message.ID,
+					"Hello Alice",
+					message.Content,
+				)
+			}
+		}
+
+		// Make sure the unrelated message isn't returned.
+		if message.Content == "This should not be returned" {
+			t.Fatal("unrelated conversation message was returned")
+		}
+	}
+
+	if !foundMessage1 {
+		t.Errorf("expected message %d to be returned", message1ID)
+	}
+
+	if !foundMessage2 {
+		t.Errorf("expected message %d to be returned", message2ID)
+	}
+
+	t.Logf(
+		"IT-API-023 PASS: retrieved 2 messages from conversation %d",
+		conversationID,
+	)
+}
+
+func TestIT_API_024_GetMessagesFromNonExistentConversation(t *testing.T) {
+	database := testutil.SetupDatabase(t)
+
+	username := fmt.Sprintf(
+		"test_IT-API-024_%d",
+		time.Now().UnixNano(),
+	)
+
+	// Create test user.
+	_, err := database.Exec(
+		"INSERT INTO users (username) VALUES (?)",
+		username,
+	)
+	if err != nil {
+		t.Fatalf("failed to create test user: %v", err)
+	}
+
+	// Generate a conversation ID that does not exist.
+	var nonexistentConversationID int
+
+	err = database.QueryRow(
+		`SELECT COALESCE(MAX(id), 0) + 1000
+		 FROM conversations`,
+	).Scan(&nonexistentConversationID)
+
+	if err != nil {
+		t.Fatalf(
+			"failed to generate nonexistent conversation ID: %v",
+			err,
+		)
+	}
+
+	// Log the user in.
+	loginBody := fmt.Sprintf(
+		`{"username":%q}`,
+		username,
+	)
+
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(loginBody),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusOK &&
+		loginRecorder.Code != http.StatusCreated {
+		t.Fatalf(
+			"expected login to return 200 or 201, got %d. Body: %s",
+			loginRecorder.Code,
+			loginRecorder.Body.String(),
+		)
+	}
+
+	// Get session cookie.
+	var sessionCookie *http.Cookie
+
+	for _, cookie := range loginRecorder.Result().Cookies() {
+		if cookie.Name == "session_token" {
+			sessionCookie = cookie
+			break
+		}
+	}
+
+	if sessionCookie == nil {
+		t.Fatal("expected login to create session_token cookie")
+	}
+
+	// Request messages from nonexistent conversation.
+	req := httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf(
+			"/api/conversations/%d/messages",
+			nonexistentConversationID,
+		),
+		nil,
+	)
+
+	req.AddCookie(sessionCookie)
+
+	req.SetPathValue(
+		"convoID",
+		fmt.Sprintf("%d", nonexistentConversationID),
+	)
+
+	recorder := httptest.NewRecorder()
+
+	handlers.GetMessages(recorder, req)
+
+	// The request should be rejected.
+	if recorder.Code < 400 || recorder.Code >= 500 {
+		t.Fatalf(
+			"expected 4xx status for nonexistent conversation, got %d. Body: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+
+	t.Logf(
+		"IT-API-024 PASS: nonexistent conversation %d was rejected",
+		nonexistentConversationID,
+	)
+}
