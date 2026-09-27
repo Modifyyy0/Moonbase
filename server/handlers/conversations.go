@@ -462,12 +462,32 @@ func LeaveConvo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(`DELETE FROM user_in_conversation WHERE conversation_id = ? AND user_id = ?`, convoId, userId)
+	result, err := db.Exec(
+	`DELETE FROM user_in_conversation
+	 WHERE conversation_id = ? AND user_id = ?`,
+	convoId,
+	userId,
+)
 
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+if err != nil {
+	http.Error(w, err.Error(), http.StatusInternalServerError)
+	return
+}
+
+rowsAffected, err := result.RowsAffected()
+if err != nil {
+	http.Error(w, err.Error(), http.StatusInternalServerError)
+	return
+}
+
+if rowsAffected == 0 {
+	http.Error(
+		w,
+		"User is not a member of the conversation",
+		http.StatusBadRequest,
+	)
+	return
+}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
