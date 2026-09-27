@@ -2660,3 +2660,216 @@ func TestIT_API_021_JoinNonExistentConversation(t *testing.T) {
 		nonexistentConversationID,
 	)
 }
+
+func TestIT_API_022_LeaveConversationAsNonMember(t *testing.T) {
+	database := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf(
+		"test_IT-API-022_Alice_%d",
+		time.Now().UnixNano(),
+	)
+	bob := fmt.Sprintf(
+		"test_IT-API-022_Bob_%d",
+		time.Now().UnixNano(),
+	)
+
+	// Create Alice and Bob.
+	_, err := database.Exec(
+		"INSERT INTO users (username) VALUES (?), (?)",
+		alice,
+		bob,
+	)
+	if err != nil {
+		t.Fatalf("failed to create test users: %v", err)
+	}
+
+	// Get their IDs.
+	var aliceID, bobID int
+
+	err = database.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		alice,
+	).Scan(&aliceID)
+	if err != nil {
+		t.Fatalf("failed to get Alice's ID: %v", err)
+	}
+
+	err = database.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		bob,
+	).Scan(&bobID)
+	if err != nil {
+		t.Fatalf("failed to get Bob's ID: %v", err)
+	}
+
+	// Create conversation.
+	result, err := database.Exec(
+		`INSERT INTO conversations (name, conversation_type)
+		 VALUES (?, ?)`,
+		"IT-API-022 Leave Non-Member Test",
+		"group",
+	)
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+
+	conversationID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get conversation ID: %v", err)
+	}
+
+	// Add ONLY Alice.
+	_, err = database.Exec(
+		`INSERT INTO user_in_conversation
+		 (user_id, conversation_id)
+		 VALUES (?, ?)`,
+		aliceID,
+		conversationID,
+	)
+	if err != nil {
+		t.Fatalf("failed to add Alice to conversation: %v", err)
+	}
+
+	// Verify Bob is NOT a member.
+	var membershipCount int
+
+	err = database.QueryRow(
+		`SELECT COUNT(*)
+		 FROM user_in_conversation
+		 WHERE user_id = ? AND conversation_id = ?`,
+		bobID,
+		conversationID,
+	).Scan(&membershipCount)
+
+	if err != nil {
+		t.Fatalf("failed to check Bob's initial membership: %v", err)
+	}
+
+	if membershipCount != 0 {
+		t.Fatalf(
+			"expected Bob to not be a member initially, got count %d",
+			membershipCount,
+		)
+	}
+
+	// Log Bob in.
+	loginBody := fmt.Sprintf(
+		`{"username":%q}`,
+		bob,
+	)
+
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(loginBody),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusOK &&
+		loginRecorder.Code != http.StatusCreated {
+		t.Fatalf(
+			"expected login to return 200 or 201, got %d. Body: %s",
+			loginRecorder.Code,
+			loginRecorder.Body.String(),
+		)
+	}
+
+	// Get Bob's session cookie.
+	var sessionCookie *http.Cookie
+
+	for _, cookie := range loginRecorder.Result().Cookies() {
+		if cookie.Name == "session_token" {
+			sessionCookie = cookie
+			break
+		}
+	}
+
+	if sessionCookie == nil {
+		t.Fatal("expected login to create session_token cookie")
+	}
+
+	// Bob attempts to leave a conversation he is not a member of.
+	req := httptest.NewRequest(
+		http.MethodDelete,
+		fmt.Sprintf(
+			"/api/conversations/%d/members/me",
+			conversationID,
+		),
+		nil,
+	)
+
+	req.AddCookie(sessionCookie)
+
+	req.SetPathValue(
+		"convoID",
+		fmt.Sprintf("%d", conversationID),
+	)
+
+	recorder := httptest.NewRecorder()
+
+	handlers.LeaveConvo(recorder, req)
+
+	// Leaving as a non-member should fail.
+	if recorder.Code < 400 || recorder.Code >= 500 {
+		t.Fatalf(
+			"expected 4xx status for non-member leaving, got %d. Body: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+
+	// Verify Bob is still not a member.
+	err = database.QueryRow(
+		`SELECT COUNT(*)
+		 FROM user_in_conversation
+		 WHERE user_id = ? AND conversation_id = ?`,
+		bobID,
+		conversationID,
+	).Scan(&membershipCount)
+
+	if err != nil {
+		t.Fatalf(
+			"failed to verify Bob's membership after failed leave: %v",
+			err,
+		)
+	}
+
+	if membershipCount != 0 {
+		t.Fatalf(
+			"expected Bob to remain a non-member, got count %d",
+			membershipCount,
+		)
+	}
+
+	// Verify Alice is still a member.
+	err = database.QueryRow(
+		`SELECT COUNT(*)
+		 FROM user_in_conversation
+		 WHERE user_id = ? AND conversation_id = ?`,
+		aliceID,
+		conversationID,
+	).Scan(&membershipCount)
+
+	if err != nil {
+		t.Fatalf(
+			"failed to verify Alice's membership: %v",
+			err,
+		)
+	}
+
+	if membershipCount != 1 {
+		t.Fatalf(
+			"expected Alice to remain a member, got count %d",
+			membershipCount,
+		)
+	}
+
+	t.Logf(
+		"IT-API-022 PASS: non-member Bob could not leave conversation %d",
+		conversationID,
+	)
+}
