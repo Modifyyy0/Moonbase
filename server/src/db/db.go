@@ -36,14 +36,15 @@ func Connect() error {
 	port := os.Getenv("DB_PORT")
 	dbName := os.Getenv("DB_NAME")
 
+	_ = godotenv.Load()
+
 	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?%s",
+		"%s:%s@tcp(%s:%s)/%s?parseTime=true&tls=true",
 		user,
 		password,
 		host,
 		port,
 		dbName,
-		"parseTime=true",
 	)
 
 	DB, err = sql.Open("mysql", dsn)
