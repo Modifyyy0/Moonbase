@@ -4086,8 +4086,7 @@ func TestIT_API_033_GetConversationsWithoutAuthentication(t *testing.T) {
 }
 
 func TestIT_API_034_GetConversationsWithInvalidSession(t *testing.T) {
-	db := testutil.SetupDatabase(t)
-    defer db.Close()
+
 
 	req := httptest.NewRequest(
 		http.MethodGet,

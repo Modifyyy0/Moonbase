@@ -78,9 +78,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.TrimSpace(u.Name) == "" {
-	http.Error(w, "username cannot be empty", http.StatusBadRequest)
-	return
-}
+		http.Error(w, "username cannot be empty", http.StatusBadRequest)
+		return
+	}
 
 	created := false
 	err := db.QueryRow(`SELECT id FROM users WHERE username = ?`, u.Name).Scan(&u.ID)
