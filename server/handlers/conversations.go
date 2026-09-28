@@ -40,7 +40,7 @@ func getUserConversation(w http.ResponseWriter, r *http.Request) {
 	err = db.QueryRow(`SELECT users.id FROM sessions JOIN users ON users.username = sessions.username WHERE sessions.session_token = ?`, cookie.Value).Scan(&userID)
 
 	if err != nil {
-		http.Error(w, "the user id was not obtained from the cookies in the db", http.StatusInternalServerError)
+		http.Error(w, "the user id was not obtained from the cookies in the db", http.StatusUnauthorized)
 		return
 	}
 
