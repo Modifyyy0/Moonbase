@@ -177,15 +177,15 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 		var existingID int
 		var existingName string
 		err = tx.QueryRow(`
-			SELECT c.id, c.name
-			FROM conversations AS c
-			JOIN user_in_conversation AS members ON members.conversation_id = c.id
-			WHERE c.conversation_type = 'direct'
-			  AND members.user_id IN (?, ?)
-			GROUP BY c.id, c.name
-			HAVING COUNT(DISTINCT members.user_id) = 2
-			   AND (SELECT COUNT(*) FROM user_in_conversation WHERE conversation_id = c.id) = 2
-		`, currentUserID, memberIDs[0]).Scan(&existingID, &existingName)
+    SELECT c.id, COALESCE(c.name, '')
+    FROM conversations AS c
+    JOIN user_in_conversation AS members ON members.conversation_id = c.id
+    WHERE c.conversation_type = 'direct'
+      AND members.user_id IN (?, ?)
+    GROUP BY c.id, c.name
+    HAVING COUNT(DISTINCT members.user_id) = 2
+       AND (SELECT COUNT(*) FROM user_in_conversation WHERE conversation_id = c.id) = 2
+`, currentUserID, memberIDs[0]).Scan(&existingID, &existingName)
 		if err == nil {
 			if err := tx.Commit(); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -463,31 +463,31 @@ func LeaveConvo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := db.Exec(
-	`DELETE FROM user_in_conversation
+		`DELETE FROM user_in_conversation
 	 WHERE conversation_id = ? AND user_id = ?`,
-	convoId,
-	userId,
-)
-
-if err != nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-}
-
-rowsAffected, err := result.RowsAffected()
-if err != nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-}
-
-if rowsAffected == 0 {
-	http.Error(
-		w,
-		"User is not a member of the conversation",
-		http.StatusBadRequest,
+		convoId,
+		userId,
 	)
-	return
-}
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if rowsAffected == 0 {
+		http.Error(
+			w,
+			"User is not a member of the conversation",
+			http.StatusBadRequest,
+		)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
