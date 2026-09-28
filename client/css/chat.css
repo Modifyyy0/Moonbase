@@ -17,6 +17,24 @@ body {
     background-color: black;
 }
 
+#no-convo {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    height: 100%;
+}
+
+#no-convo img {
+    min-height: 200px;
+    min-width: 200px;
+}
+
+#no-convo p {
+    font-size: 20px;
+    color: #4D4D4D
+}
+
 #convo-head {
     display: flex;
     align-items: center;
