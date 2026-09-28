@@ -3300,3 +3300,108 @@ func TestIT_API_024_GetMessagesFromNonExistentConversation(t *testing.T) {
 		nonexistentConversationID,
 	)
 }
+
+func TestIT_API_025_GetMessagesWithoutAuthentication(t *testing.T) {
+	database := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf(
+		"test_IT-API-025_Alice_%d",
+		time.Now().UnixNano(),
+	)
+	bob := fmt.Sprintf(
+		"test_IT-API-025_Bob_%d",
+		time.Now().UnixNano(),
+	)
+
+	// Create users.
+	aliceResult, err := database.Exec(
+		"INSERT INTO users (username) VALUES (?)",
+		alice,
+	)
+	if err != nil {
+		t.Fatalf("failed to create Alice: %v", err)
+	}
+
+	aliceID64, err := aliceResult.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get Alice ID: %v", err)
+	}
+	aliceID := int(aliceID64)
+
+	bobResult, err := database.Exec(
+		"INSERT INTO users (username) VALUES (?)",
+		bob,
+	)
+	if err != nil {
+		t.Fatalf("failed to create Bob: %v", err)
+	}
+
+	bobID64, err := bobResult.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get Bob ID: %v", err)
+	}
+	bobID := int(bobID64)
+
+	// Create a conversation.
+	result, err := database.Exec(
+		`INSERT INTO conversations (name, conversation_type)
+		 VALUES (?, 'group')`,
+		"IT-API-025 Test Conversation",
+	)
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+
+	conversationID64, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get conversation ID: %v", err)
+	}
+	conversationID := int(conversationID64)
+
+	// Add both users to the conversation.
+	_, err = database.Exec(
+		`INSERT INTO user_in_conversation (user_id, conversation_id)
+		 VALUES (?, ?), (?, ?)`,
+		aliceID,
+		conversationID,
+		bobID,
+		conversationID,
+	)
+	if err != nil {
+		t.Fatalf("failed to add users to conversation: %v", err)
+	}
+
+	// Request messages WITHOUT a session cookie.
+	req := httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf(
+			"/api/conversations/%d/messages",
+			conversationID,
+		),
+		nil,
+	)
+
+	req.SetPathValue(
+		"convoID",
+		fmt.Sprintf("%d", conversationID),
+	)
+
+	recorder := httptest.NewRecorder()
+
+	handlers.GetMessages(recorder, req)
+
+	// The endpoint should require authentication.
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf(
+			"expected 401 Unauthorized, got %d. Body: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+
+	t.Logf(
+		"IT-API-025 PASS: unauthenticated request for conversation %d was rejected",
+		conversationID,
+	)
+}
+

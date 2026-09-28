@@ -21,6 +21,26 @@ func GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+
+	err = db.QueryRow(`
+		SELECT users.id
+		FROM sessions
+		JOIN users ON sessions.username = users.username
+		WHERE sessions.session_token = ?
+	`, cookie.Value).Scan(&userID)
+
+	if err != nil {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
 	var conversationExists bool
 
 	err = db.DB.QueryRow(
