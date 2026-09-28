@@ -4084,3 +4084,35 @@ func TestIT_API_033_GetConversationsWithoutAuthentication(t *testing.T) {
 		"IT-API-033 PASS: unauthenticated conversation list request was rejected",
 	)
 }
+
+func TestIT_API_034_GetConversationsWithInvalidSession(t *testing.T) {
+	db := testutil.SetupDatabase(t)
+    defer db.Close()
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/conversations",
+		nil,
+	)
+
+	req.AddCookie(&http.Cookie{
+		Name:  "session_token",
+		Value: "this_is_not_a_valid_session",
+	})
+
+	recorder := httptest.NewRecorder()
+
+	handlers.HandleConversations(recorder, req)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf(
+			"expected 401 Unauthorized, got %d. Body: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+
+	t.Log(
+		"IT-API-034 PASS: invalid session was rejected when retrieving conversations",
+	)
+}
