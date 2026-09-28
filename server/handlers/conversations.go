@@ -33,7 +33,7 @@ func getUserConversation(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session_token")
 
 	if err != nil {
-		http.Error(w, "Unauthorzed bitrh, get away from my screen", http.StatusInternalServerError)
+		http.Error(w, "Unauthorzed bitrh, get away from my screen", http.StatusUnauthorized)
 		return
 	}
 
