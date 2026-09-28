@@ -3405,3 +3405,147 @@ func TestIT_API_025_GetMessagesWithoutAuthentication(t *testing.T) {
 	)
 }
 
+func TestIT_API_026_GetMessagesAsNonMember(t *testing.T) {
+	database := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf(
+		"test_IT-API-026_Alice_%d",
+		time.Now().UnixNano(),
+	)
+	bob := fmt.Sprintf(
+		"test_IT-API-026_Bob_%d",
+		time.Now().UnixNano(),
+	)
+
+	// Create Alice.
+	aliceResult, err := database.Exec(
+		"INSERT INTO users (username) VALUES (?)",
+		alice,
+	)
+	if err != nil {
+		t.Fatalf("failed to create Alice: %v", err)
+	}
+
+	aliceID64, err := aliceResult.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get Alice ID: %v", err)
+	}
+	aliceID := int(aliceID64)
+
+	// Create Bob.
+	bobResult, err := database.Exec(
+		"INSERT INTO users (username) VALUES (?)",
+		bob,
+	)
+	if err != nil {
+		t.Fatalf("failed to create Bob: %v", err)
+	}
+
+	bobID64, err := bobResult.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get Bob ID: %v", err)
+	}
+	bobID := int(bobID64)
+
+	// Create conversation.
+	result, err := database.Exec(
+		`INSERT INTO conversations (name, conversation_type)
+		 VALUES (?, 'group')`,
+		"IT-API-026 Test Conversation",
+	)
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+
+	conversationID64, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get conversation ID: %v", err)
+	}
+	conversationID := int(conversationID64)
+
+	// Only Bob is a member.
+	_, err = database.Exec(
+		`INSERT INTO user_in_conversation (user_id, conversation_id)
+		 VALUES (?, ?)`,
+		bobID,
+		conversationID,
+	)
+	if err != nil {
+		t.Fatalf("failed to add Bob to conversation: %v", err)
+	}
+
+	// Log Alice in.
+	loginBody := fmt.Sprintf(
+		`{"username":%q}`,
+		alice,
+	)
+
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(loginBody),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusOK &&
+		loginRecorder.Code != http.StatusCreated {
+		t.Fatalf(
+			"expected login to return 200 or 201, got %d. Body: %s",
+			loginRecorder.Code,
+			loginRecorder.Body.String(),
+		)
+	}
+
+	var sessionCookie *http.Cookie
+
+	for _, cookie := range loginRecorder.Result().Cookies() {
+		if cookie.Name == "session_token" {
+			sessionCookie = cookie
+			break
+		}
+	}
+
+	if sessionCookie == nil {
+		t.Fatal("expected login to create session_token cookie")
+	}
+
+	// Alice tries to read Bob's conversation.
+	req := httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf(
+			"/api/conversations/%d/messages",
+			conversationID,
+		),
+		nil,
+	)
+
+	req.AddCookie(sessionCookie)
+
+	req.SetPathValue(
+		"convoID",
+		fmt.Sprintf("%d", conversationID),
+	)
+
+	recorder := httptest.NewRecorder()
+
+	handlers.GetMessages(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf(
+			"expected 403 Forbidden, got %d. Body: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+
+	t.Logf(
+		"IT-API-026 PASS: non-member Alice was rejected from conversation %d",
+		conversationID,
+	)
+
+	_ = aliceID
+}
