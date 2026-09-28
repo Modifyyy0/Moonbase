@@ -41,6 +41,35 @@ func GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var isMember bool
+
+	err = db.QueryRow(`
+    SELECT EXISTS(
+        SELECT 1
+        FROM user_in_conversation
+        WHERE user_id = ?
+        AND conversation_id = ?
+    )
+`, userID, convoID).Scan(&isMember)
+
+	if err != nil {
+		http.Error(
+			w,
+			"Could not verify conversation membership",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	if !isMember {
+		http.Error(
+			w,
+			"You are not a member of this conversation",
+			http.StatusForbidden,
+		)
+		return
+	}
+
 	var conversationExists bool
 
 	err = db.DB.QueryRow(
