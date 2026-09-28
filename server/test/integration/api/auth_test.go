@@ -4119,7 +4119,6 @@ func TestIT_API_034_GetConversationsWithInvalidSession(t *testing.T) {
 
 func TestIT_API_035_GetConversationsResponseStructure(t *testing.T) {
 	db := testutil.SetupDatabase(t)
-	defer db.Close()
 
 	// Create a unique user
 	username := fmt.Sprintf("test_IT-API-035_%d", time.Now().UnixNano())
@@ -4275,7 +4274,6 @@ func TestIT_API_035_GetConversationsResponseStructure(t *testing.T) {
 
 func TestIT_API_036_GetConversationsWithNoConversations(t *testing.T) {
 	db := testutil.SetupDatabase(t)
-	defer db.Close()
 
 	// Create a unique user who will not belong to any conversation.
 	username := fmt.Sprintf(
@@ -4386,7 +4384,6 @@ func TestIT_API_036_GetConversationsWithNoConversations(t *testing.T) {
 
 func TestIT_API_037_CreateDirectConversationWithSelf(t *testing.T) {
 	db := testutil.SetupDatabase(t)
-	defer db.Close()
 
 	username := fmt.Sprintf(
 		"test_IT-API-037_%d",
@@ -4506,7 +4503,6 @@ func TestIT_API_037_CreateDirectConversationWithSelf(t *testing.T) {
 
 func TestIT_API_038_DuplicateDirectConversation(t *testing.T) {
 	db := testutil.SetupDatabase(t)
-	defer db.Close()
 
 	alice := fmt.Sprintf(
 		"test_IT-API-038_Alice_%d",
@@ -4711,3 +4707,1332 @@ func TestIT_API_038_DuplicateDirectConversation(t *testing.T) {
 	)
 }
 
+func TestIT_API_039_DirectConversationIsSymmetric(t *testing.T) {
+	db := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf("test_IT-API-039_Alice_%d", time.Now().UnixNano())
+	bob := fmt.Sprintf("test_IT-API-039_Bob_%d", time.Now().UnixNano())
+
+	// Create users.
+	_, err := db.Exec(
+		"INSERT INTO users (username) VALUES (?), (?)",
+		alice, bob,
+	)
+	if err != nil {
+		t.Fatalf("failed to create users: %v", err)
+	}
+
+	// Login as Alice.
+	loginBody := strings.NewReader(
+		fmt.Sprintf(`{"username":"%s"}`, alice),
+	)
+
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		loginBody,
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusCreated &&
+		loginRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"login failed: expected 200 or 201, got %d. Body: %s",
+			loginRecorder.Code,
+			loginRecorder.Body.String(),
+		)
+	}
+
+	var aliceCookie *http.Cookie
+	for _, cookie := range loginRecorder.Result().Cookies() {
+		if cookie.Name == "session_token" {
+			aliceCookie = cookie
+			break
+		}
+	}
+
+	if aliceCookie == nil {
+		t.Fatal("Alice login did not return session_token")
+	}
+
+	// Alice creates Alice <-> Bob.
+	createBody := fmt.Sprintf(
+		`{"type":"direct","members":["%s"]}`,
+		bob,
+	)
+
+	createReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/conversations",
+		strings.NewReader(createBody),
+	)
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.AddCookie(aliceCookie)
+
+	createRecorder := httptest.NewRecorder()
+	handlers.HandleConversations(createRecorder, createReq)
+
+	if createRecorder.Code != http.StatusCreated {
+		t.Fatalf(
+			"Alice's conversation creation failed: expected 201, got %d. Body: %s",
+			createRecorder.Code,
+			createRecorder.Body.String(),
+		)
+	}
+
+	var created struct {
+		Conversation struct {
+			ID int `json:"id"`
+		} `json:"conversation"`
+	}
+
+	err = json.NewDecoder(createRecorder.Body).Decode(&created)
+	if err != nil {
+		t.Fatalf("failed to decode creation response: %v", err)
+	}
+
+	originalID := created.Conversation.ID
+
+	// Login as Bob.
+	bobLoginBody := strings.NewReader(
+		fmt.Sprintf(`{"username":"%s"}`, bob),
+	)
+
+	bobLoginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		bobLoginBody,
+	)
+	bobLoginReq.Header.Set("Content-Type", "application/json")
+
+	bobLoginRecorder := httptest.NewRecorder()
+	handlers.LoginHandler(bobLoginRecorder, bobLoginReq)
+
+	if bobLoginRecorder.Code != http.StatusCreated &&
+		bobLoginRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"Bob login failed: expected 200 or 201, got %d. Body: %s",
+			bobLoginRecorder.Code,
+			bobLoginRecorder.Body.String(),
+		)
+	}
+
+	var bobCookie *http.Cookie
+	for _, cookie := range bobLoginRecorder.Result().Cookies() {
+		if cookie.Name == "session_token" {
+			bobCookie = cookie
+			break
+		}
+	}
+
+	if bobCookie == nil {
+		t.Fatal("Bob login did not return session_token")
+	}
+
+	// Bob requests Bob <-> Alice.
+	duplicateBody := fmt.Sprintf(
+		`{"type":"direct","members":["%s"]}`,
+		alice,
+	)
+
+	duplicateReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/conversations",
+		strings.NewReader(duplicateBody),
+	)
+	duplicateReq.Header.Set("Content-Type", "application/json")
+	duplicateReq.AddCookie(bobCookie)
+
+	duplicateRecorder := httptest.NewRecorder()
+	handlers.HandleConversations(duplicateRecorder, duplicateReq)
+
+	if duplicateRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"expected 200 for existing symmetric direct conversation, got %d. Body: %s",
+			duplicateRecorder.Code,
+			duplicateRecorder.Body.String(),
+		)
+	}
+
+	var duplicate struct {
+		Conversation struct {
+			ID int `json:"id"`
+		} `json:"conversation"`
+	}
+
+	err = json.NewDecoder(duplicateRecorder.Body).Decode(&duplicate)
+	if err != nil {
+		t.Fatalf("failed to decode duplicate response: %v", err)
+	}
+
+	if duplicate.Conversation.ID != originalID {
+		t.Fatalf(
+			"expected existing conversation ID %d, got %d",
+			originalID,
+			duplicate.Conversation.ID,
+		)
+	}
+
+	var conversationCount int
+
+	err = db.QueryRow(`
+	SELECT COUNT(*)
+	FROM (
+		SELECT c.id
+		FROM conversations AS c
+		JOIN user_in_conversation AS uic
+			ON uic.conversation_id = c.id
+		WHERE c.conversation_type = 'direct'
+		  AND uic.user_id IN (
+		      SELECT id
+		      FROM users
+		      WHERE username IN (?, ?)
+		  )
+		GROUP BY c.id
+		HAVING COUNT(DISTINCT uic.user_id) = 2
+		   AND (
+		       SELECT COUNT(*)
+		       FROM user_in_conversation
+		       WHERE conversation_id = c.id
+		   ) = 2
+	) AS matching_conversations
+`, alice, bob).Scan(&conversationCount)
+
+	if err != nil {
+		t.Fatalf("failed to verify direct conversation count: %v", err)
+	}
+
+	if conversationCount != 1 {
+		t.Fatalf(
+			"expected exactly one direct conversation, got %d",
+			conversationCount,
+		)
+	}
+}
+
+func TestIT_API_040_DuplicateGroupConversationAllowed(t *testing.T) {
+	db := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf("test_IT-API-040_Alice_%d", time.Now().UnixNano())
+	bob := fmt.Sprintf("test_IT-API-040_Bob_%d", time.Now().UnixNano())
+	charlie := fmt.Sprintf("test_IT-API-040_Charlie_%d", time.Now().UnixNano())
+
+	_, err := db.Exec(
+		"INSERT INTO users (username) VALUES (?), (?), (?)",
+		alice, bob, charlie,
+	)
+	if err != nil {
+		t.Fatalf("failed to create users: %v", err)
+	}
+
+	// Login as Alice.
+	loginBody := strings.NewReader(
+		fmt.Sprintf(`{"username":"%s"}`, alice),
+	)
+
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		loginBody,
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusCreated &&
+		loginRecorder.Code != http.StatusOK {
+		t.Fatalf("login failed: got %d", loginRecorder.Code)
+	}
+
+	var cookie *http.Cookie
+	for _, c := range loginRecorder.Result().Cookies() {
+		if c.Name == "session_token" {
+			cookie = c
+			break
+		}
+	}
+
+	if cookie == nil {
+		t.Fatal("login did not return session_token")
+	}
+
+	body := fmt.Sprintf(
+		`{"type":"group","name":"Test Group","members":["%s","%s"]}`,
+		bob,
+		charlie,
+	)
+
+	// First group.
+	req1 := httptest.NewRequest(
+		http.MethodPost,
+		"/api/conversations",
+		strings.NewReader(body),
+	)
+	req1.Header.Set("Content-Type", "application/json")
+	req1.AddCookie(cookie)
+
+	recorder1 := httptest.NewRecorder()
+	handlers.HandleConversations(recorder1, req1)
+
+	if recorder1.Code != http.StatusCreated {
+		t.Fatalf(
+			"first group creation expected 201, got %d. Body: %s",
+			recorder1.Code,
+			recorder1.Body.String(),
+		)
+	}
+
+	var first struct {
+		Conversation struct {
+			ID int `json:"id"`
+		} `json:"conversation"`
+	}
+
+	if err := json.NewDecoder(recorder1.Body).Decode(&first); err != nil {
+		t.Fatalf("failed to decode first response: %v", err)
+	}
+
+	// Second identical group.
+	req2 := httptest.NewRequest(
+		http.MethodPost,
+		"/api/conversations",
+		strings.NewReader(body),
+	)
+	req2.Header.Set("Content-Type", "application/json")
+	req2.AddCookie(cookie)
+
+	recorder2 := httptest.NewRecorder()
+	handlers.HandleConversations(recorder2, req2)
+
+	if recorder2.Code != http.StatusCreated {
+		t.Fatalf(
+			"second group creation expected 201, got %d. Body: %s",
+			recorder2.Code,
+			recorder2.Body.String(),
+		)
+	}
+
+	var second struct {
+		Conversation struct {
+			ID int `json:"id"`
+		} `json:"conversation"`
+	}
+
+	if err := json.NewDecoder(recorder2.Body).Decode(&second); err != nil {
+		t.Fatalf("failed to decode second response: %v", err)
+	}
+
+	if first.Conversation.ID == second.Conversation.ID {
+		t.Fatalf(
+			"expected two different group conversations, both returned ID %d",
+			first.Conversation.ID,
+		)
+	}
+
+	var count int
+
+	err = db.QueryRow(
+		`SELECT COUNT(*)
+		 FROM conversations
+		 WHERE id IN (?, ?)`,
+		first.Conversation.ID,
+		second.Conversation.ID,
+	).Scan(&count)
+
+	if err != nil {
+		t.Fatalf("failed to verify group conversations: %v", err)
+	}
+
+	if count != 2 {
+		t.Fatalf("expected two group conversations in database, got %d", count)
+	}
+
+	t.Logf(
+		"IT-API-040 PASS: duplicate group requests created separate conversations %d and %d",
+		first.Conversation.ID,
+		second.Conversation.ID,
+	)
+}
+
+func TestIT_API_041_GroupConversationRequiresName(t *testing.T) {
+	db := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf("test_IT-API-041_Alice_%d", time.Now().UnixNano())
+	bob := fmt.Sprintf("test_IT-API-041_Bob_%d", time.Now().UnixNano())
+	charlie := fmt.Sprintf("test_IT-API-041_Charlie_%d", time.Now().UnixNano())
+
+	_, err := db.Exec(
+		"INSERT INTO users (username) VALUES (?), (?), (?)",
+		alice, bob, charlie,
+	)
+	if err != nil {
+		t.Fatalf("failed to create users: %v", err)
+	}
+
+	var aliceID int
+	err = db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		alice,
+	).Scan(&aliceID)
+	if err != nil {
+		t.Fatalf("failed to get Alice ID: %v", err)
+	}
+
+	var beforeCount int
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM conversations",
+	).Scan(&beforeCount)
+	if err != nil {
+		t.Fatalf("failed to count conversations: %v", err)
+	}
+
+	// Login.
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(fmt.Sprintf(`{"username":"%s"}`, alice)),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	var cookie *http.Cookie
+	for _, c := range loginRecorder.Result().Cookies() {
+		if c.Name == "session_token" {
+			cookie = c
+			break
+		}
+	}
+
+	if cookie == nil {
+		t.Fatal("login did not return session_token")
+	}
+
+	// Missing name.
+	body := fmt.Sprintf(
+		`{"type":"group","members":["%s","%s"]}`,
+		bob,
+		charlie,
+	)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/conversations",
+		strings.NewReader(body),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+
+	recorder := httptest.NewRecorder()
+	handlers.HandleConversations(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf(
+			"expected 400 Bad Request, got %d. Body: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+
+	var afterCount int
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM conversations",
+	).Scan(&afterCount)
+	if err != nil {
+		t.Fatalf("failed to count conversations after request: %v", err)
+	}
+
+	if afterCount != beforeCount {
+		t.Fatalf(
+			"group conversation was created despite missing name: before=%d, after=%d",
+			beforeCount,
+			afterCount,
+		)
+	}
+
+	_ = aliceID
+
+	t.Log(
+		"IT-API-041 PASS: group conversation without a name was rejected",
+	)
+}
+
+func TestIT_API_042_DirectConversationRejectsMultipleMembers(t *testing.T) {
+	db := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf("test_IT-API-042_Alice_%d", time.Now().UnixNano())
+	bob := fmt.Sprintf("test_IT-API-042_Bob_%d", time.Now().UnixNano())
+	charlie := fmt.Sprintf("test_IT-API-042_Charlie_%d", time.Now().UnixNano())
+
+	_, err := db.Exec(
+		"INSERT INTO users (username) VALUES (?), (?), (?)",
+		alice, bob, charlie,
+	)
+	if err != nil {
+		t.Fatalf("failed to create users: %v", err)
+	}
+
+	var beforeCount int
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM conversations",
+	).Scan(&beforeCount)
+	if err != nil {
+		t.Fatalf("failed to count conversations: %v", err)
+	}
+
+	// Login as Alice.
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(fmt.Sprintf(`{"username":"%s"}`, alice)),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusCreated &&
+		loginRecorder.Code != http.StatusOK {
+		t.Fatalf("login failed: got %d", loginRecorder.Code)
+	}
+
+	var cookie *http.Cookie
+	for _, c := range loginRecorder.Result().Cookies() {
+		if c.Name == "session_token" {
+			cookie = c
+			break
+		}
+	}
+
+	if cookie == nil {
+		t.Fatal("login did not return session_token")
+	}
+
+	// Direct conversation with TWO other members.
+	body := fmt.Sprintf(
+		`{"type":"direct","members":["%s","%s"]}`,
+		bob,
+		charlie,
+	)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/conversations",
+		strings.NewReader(body),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+
+	recorder := httptest.NewRecorder()
+	handlers.HandleConversations(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf(
+			"expected 400 Bad Request, got %d. Body: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+
+	var afterCount int
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM conversations",
+	).Scan(&afterCount)
+	if err != nil {
+		t.Fatalf("failed to count conversations after request: %v", err)
+	}
+
+	if afterCount != beforeCount {
+		t.Fatalf(
+			"conversation was created despite invalid direct member count: before=%d, after=%d",
+			beforeCount,
+			afterCount,
+		)
+	}
+
+	t.Log(
+		"IT-API-042 PASS: direct conversation with multiple other members was rejected",
+	)
+}
+
+func TestIT_API_043_InvalidConversationType(t *testing.T) {
+	db := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf("test_IT-API-043_Alice_%d", time.Now().UnixNano())
+	bob := fmt.Sprintf("test_IT-API-043_Bob_%d", time.Now().UnixNano())
+	charlie := fmt.Sprintf("test_IT-API-043_Charlie_%d", time.Now().UnixNano())
+
+	_, err := db.Exec(
+		"INSERT INTO users (username) VALUES (?), (?), (?)",
+		alice, bob, charlie,
+	)
+	if err != nil {
+		t.Fatalf("failed to create users: %v", err)
+	}
+
+	var beforeCount int
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM conversations",
+	).Scan(&beforeCount)
+	if err != nil {
+		t.Fatalf("failed to count conversations: %v", err)
+	}
+
+	// Login as Alice.
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(fmt.Sprintf(`{"username":"%s"}`, alice)),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusCreated &&
+		loginRecorder.Code != http.StatusOK {
+		t.Fatalf("login failed: got %d", loginRecorder.Code)
+	}
+
+	var cookie *http.Cookie
+	for _, c := range loginRecorder.Result().Cookies() {
+		if c.Name == "session_token" {
+			cookie = c
+			break
+		}
+	}
+
+	if cookie == nil {
+		t.Fatal("login did not return session_token")
+	}
+
+	body := fmt.Sprintf(
+		`{"type":"banana","name":"Invalid Type","members":["%s","%s"]}`,
+		bob,
+		charlie,
+	)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/conversations",
+		strings.NewReader(body),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+
+	recorder := httptest.NewRecorder()
+	handlers.HandleConversations(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf(
+			"expected 400 Bad Request, got %d. Body: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+
+	var afterCount int
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM conversations",
+	).Scan(&afterCount)
+	if err != nil {
+		t.Fatalf("failed to count conversations after request: %v", err)
+	}
+
+	if afterCount != beforeCount {
+		t.Fatalf(
+			"conversation was created despite invalid conversation type: before=%d, after=%d",
+			beforeCount,
+			afterCount,
+		)
+	}
+
+	t.Log(
+		"IT-API-043 PASS: invalid conversation type was rejected",
+	)
+}
+
+func TestIT_API_044_GetMultipleMessages(t *testing.T) {
+	db := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf("test_IT-API-044_%d", time.Now().UnixNano())
+	bob := fmt.Sprintf("test_IT-API-044_bob_%d", time.Now().UnixNano())
+
+	if err := models.CreateUser(alice); err != nil {
+		t.Fatalf("failed to create Alice: %v", err)
+	}
+	if err := models.CreateUser(bob); err != nil {
+		t.Fatalf("failed to create Bob: %v", err)
+	}
+
+	var aliceID, bobID int
+	if err := db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		alice,
+	).Scan(&aliceID); err != nil {
+		t.Fatalf("failed to get Alice ID: %v", err)
+	}
+
+	if err := db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		bob,
+	).Scan(&bobID); err != nil {
+		t.Fatalf("failed to get Bob ID: %v", err)
+	}
+
+	result, err := db.Exec(`
+		INSERT INTO conversations(name, conversation_type)
+		VALUES (?, 'direct')
+	`, bob)
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+
+	conversationID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get conversation ID: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO user_in_conversation(user_id, conversation_id)
+		VALUES (?, ?), (?, ?)
+	`, aliceID, conversationID, bobID, conversationID)
+	if err != nil {
+		t.Fatalf("failed to add conversation members: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO messages(user_id, conversation_id, content)
+		VALUES
+			(?, ?, ?),
+			(?, ?, ?),
+			(?, ?, ?)
+	`,
+		aliceID, conversationID, "First message",
+		bobID, conversationID, "Second message",
+		aliceID, conversationID, "Third message",
+	)
+	if err != nil {
+		t.Fatalf("failed to insert messages: %v", err)
+	}
+
+	// Login Alice.
+	loginBody := fmt.Sprintf(`{"username":"%s"}`, alice)
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(loginBody),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusOK &&
+		loginRecorder.Code != http.StatusCreated {
+		t.Fatalf("login failed: got status %d", loginRecorder.Code)
+	}
+
+	var loginResponse struct {
+		Token string `json:"session_token"`
+	}
+	_ = json.NewDecoder(loginRecorder.Body).Decode(&loginResponse)
+
+	cookies := loginRecorder.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("login did not return a session cookie")
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("/api/conversations/%d/messages", conversationID),
+		nil,
+	)
+	req.SetPathValue("convoID", fmt.Sprintf("%d", conversationID))
+
+	req.AddCookie(cookies[0])
+
+	recorder := httptest.NewRecorder()
+	handlers.GetMessages(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var messages []struct {
+		ID             int    `json:"ID"`
+		UserID         int    `json:"UserID"`
+		Username       string `json:"Username"`
+		ConversationID int    `json:"ConversationID"`
+		Content        string `json:"Content"`
+		SentAt         string `json:"SentAt"`
+		DeliveryStatus string `json:"delivery_status"`
+	}
+
+	if err := json.NewDecoder(recorder.Body).Decode(&messages); err != nil {
+		t.Fatalf("failed to decode messages: %v", err)
+	}
+
+	if len(messages) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(messages))
+	}
+
+	t.Logf(
+		"IT-API-044 PASS: retrieved %d messages from conversation %d",
+		len(messages),
+		conversationID,
+	)
+}
+
+
+func TestIT_API_045_MessagesReturnedInOrder(t *testing.T) {
+	db := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf("test_IT-API-045_%d", time.Now().UnixNano())
+	bob := fmt.Sprintf("test_IT-API-045_bob_%d", time.Now().UnixNano())
+
+	if err := models.CreateUser(alice); err != nil {
+		t.Fatalf("failed to create Alice: %v", err)
+	}
+	if err := models.CreateUser(bob); err != nil {
+		t.Fatalf("failed to create Bob: %v", err)
+	}
+
+	var aliceID, bobID int
+
+	if err := db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		alice,
+	).Scan(&aliceID); err != nil {
+		t.Fatalf("failed to get Alice ID: %v", err)
+	}
+
+	if err := db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		bob,
+	).Scan(&bobID); err != nil {
+		t.Fatalf("failed to get Bob ID: %v", err)
+	}
+
+	result, err := db.Exec(`
+		INSERT INTO conversations(name, conversation_type)
+		VALUES (?, 'direct')
+	`, bob)
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+
+	conversationID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get conversation ID: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO user_in_conversation(user_id, conversation_id)
+		VALUES (?, ?), (?, ?)
+	`, aliceID, conversationID, bobID, conversationID)
+	if err != nil {
+		t.Fatalf("failed to add members: %v", err)
+	}
+
+	contents := []string{
+		"Message one",
+		"Message two",
+		"Message three",
+	}
+
+	for _, content := range contents {
+		_, err := db.Exec(`
+			INSERT INTO messages(user_id, conversation_id, content)
+			VALUES (?, ?, ?)
+		`, aliceID, conversationID, content)
+
+		if err != nil {
+			t.Fatalf("failed to insert message %q: %v", content, err)
+		}
+
+		// Ensure sent_at values cannot accidentally become identical.
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	loginBody := fmt.Sprintf(`{"username":"%s"}`, alice)
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(loginBody),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusOK &&
+		loginRecorder.Code != http.StatusCreated {
+		t.Fatalf("login failed: got status %d", loginRecorder.Code)
+	}
+
+	cookies := loginRecorder.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("login did not return a session cookie")
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("/api/conversations/%d/messages", conversationID),
+		nil,
+	)
+	req.SetPathValue("convoID", fmt.Sprintf("%d", conversationID))
+
+	req.AddCookie(cookies[0])
+
+	recorder := httptest.NewRecorder()
+	handlers.GetMessages(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var messages []struct {
+		ID      int    `json:"ID"`
+		Content string `json:"Content"`
+	}
+
+	if err := json.NewDecoder(recorder.Body).Decode(&messages); err != nil {
+		t.Fatalf("failed to decode messages: %v", err)
+	}
+
+	if len(messages) != len(contents) {
+		t.Fatalf(
+			"expected %d messages, got %d",
+			len(contents),
+			len(messages),
+		)
+	}
+
+	for i, expected := range contents {
+		if messages[i].Content != expected {
+			t.Fatalf(
+				"message order incorrect at index %d: expected %q, got %q",
+				i,
+				expected,
+				messages[i].Content,
+			)
+		}
+	}
+
+	t.Logf(
+		"IT-API-045 PASS: %d messages were returned in chronological order",
+		len(messages),
+	)
+}
+
+
+func TestIT_API_046_MessageFieldsAreCorrect(t *testing.T) {
+	db := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf("test_IT-API-046_%d", time.Now().UnixNano())
+	bob := fmt.Sprintf("test_IT-API-046_bob_%d", time.Now().UnixNano())
+
+	if err := models.CreateUser(alice); err != nil {
+		t.Fatalf("failed to create Alice: %v", err)
+	}
+	if err := models.CreateUser(bob); err != nil {
+		t.Fatalf("failed to create Bob: %v", err)
+	}
+
+	var aliceID, bobID int
+
+	if err := db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		alice,
+	).Scan(&aliceID); err != nil {
+		t.Fatalf("failed to get Alice ID: %v", err)
+	}
+
+	if err := db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		bob,
+	).Scan(&bobID); err != nil {
+		t.Fatalf("failed to get Bob ID: %v", err)
+	}
+
+	result, err := db.Exec(`
+		INSERT INTO conversations(name, conversation_type)
+		VALUES (?, 'direct')
+	`, bob)
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+
+	conversationID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get conversation ID: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO user_in_conversation(user_id, conversation_id)
+		VALUES (?, ?), (?, ?)
+	`, aliceID, conversationID, bobID, conversationID)
+	if err != nil {
+		t.Fatalf("failed to add members: %v", err)
+	}
+
+	content := "Checking every message field"
+
+	result, err = db.Exec(`
+		INSERT INTO messages(user_id, conversation_id, content)
+		VALUES (?, ?, ?)
+	`, aliceID, conversationID, content)
+	if err != nil {
+		t.Fatalf("failed to insert message: %v", err)
+	}
+
+	expectedMessageID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get message ID: %v", err)
+	}
+
+	loginBody := fmt.Sprintf(`{"username":"%s"}`, alice)
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(loginBody),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusOK &&
+		loginRecorder.Code != http.StatusCreated {
+		t.Fatalf("login failed: got status %d", loginRecorder.Code)
+	}
+
+	cookies := loginRecorder.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("login did not return a session cookie")
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("/api/conversations/%d/messages", conversationID),
+		nil,
+	)
+	req.SetPathValue("convoID", fmt.Sprintf("%d", conversationID))
+	req.AddCookie(cookies[0])
+
+	recorder := httptest.NewRecorder()
+	handlers.GetMessages(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var messages []struct {
+		ID             int    `json:"ID"`
+		UserID         int    `json:"UserID"`
+		Username       string `json:"Username"`
+		ConversationID int    `json:"ConversationID"`
+		Content        string `json:"Content"`
+		SentAt         string `json:"SentAt"`
+		DeliveryStatus string `json:"delivery_status"`
+	}
+
+	if err := json.NewDecoder(recorder.Body).Decode(&messages); err != nil {
+		t.Fatalf("failed to decode messages: %v", err)
+	}
+
+	if len(messages) != 1 {
+		t.Fatalf("expected exactly 1 message, got %d", len(messages))
+	}
+
+	message := messages[0]
+
+	if message.ID != int(expectedMessageID) {
+		t.Fatalf(
+			"expected message ID %d, got %d",
+			expectedMessageID,
+			message.ID,
+		)
+	}
+
+	if message.UserID != aliceID {
+		t.Fatalf(
+			"expected UserID %d, got %d",
+			aliceID,
+			message.UserID,
+		)
+	}
+
+	if message.Username != alice {
+		t.Fatalf(
+			"expected Username %q, got %q",
+			alice,
+			message.Username,
+		)
+	}
+
+	if message.ConversationID != int(conversationID) {
+		t.Fatalf(
+			"expected ConversationID %d, got %d",
+			conversationID,
+			message.ConversationID,
+		)
+	}
+
+	if message.Content != content {
+		t.Fatalf(
+			"expected Content %q, got %q",
+			content,
+			message.Content,
+		)
+	}
+
+	if message.SentAt == "" {
+		t.Fatal("expected SentAt to be populated")
+	}
+
+	if message.DeliveryStatus == "" {
+		t.Fatal("expected delivery_status to be populated")
+	}
+
+	t.Logf(
+		"IT-API-046 PASS: message %d returned with all expected fields",
+		message.ID,
+	)
+}
+
+
+func TestIT_API_047_NonMemberCannotGetMessages(t *testing.T) {
+	db := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf("test_IT-API-047_alice_%d", time.Now().UnixNano())
+	bob := fmt.Sprintf("test_IT-API-047_bob_%d", time.Now().UnixNano())
+	charlie := fmt.Sprintf("test_IT-API-047_charlie_%d", time.Now().UnixNano())
+
+	for _, username := range []string{alice, bob, charlie} {
+		if err := models.CreateUser(username); err != nil {
+			t.Fatalf("failed to create user %s: %v", username, err)
+		}
+	}
+
+	var aliceID, bobID, charlieID int
+
+	if err := db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		alice,
+	).Scan(&aliceID); err != nil {
+		t.Fatalf("failed to get Alice ID: %v", err)
+	}
+
+	if err := db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		bob,
+	).Scan(&bobID); err != nil {
+		t.Fatalf("failed to get Bob ID: %v", err)
+	}
+
+	if err := db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		charlie,
+	).Scan(&charlieID); err != nil {
+		t.Fatalf("failed to get Charlie ID: %v", err)
+	}
+
+	result, err := db.Exec(`
+		INSERT INTO conversations(name, conversation_type)
+		VALUES (?, 'group')
+	`, "IT-API-047 Group")
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+
+	conversationID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get conversation ID: %v", err)
+	}
+
+	// Alice and Bob are members. Charlie is intentionally not.
+	_, err = db.Exec(`
+		INSERT INTO user_in_conversation(user_id, conversation_id)
+		VALUES (?, ?), (?, ?)
+	`, aliceID, conversationID, bobID, conversationID)
+	if err != nil {
+		t.Fatalf("failed to add members: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO messages(user_id, conversation_id, content)
+		VALUES (?, ?, ?)
+	`, aliceID, conversationID, "Private group message")
+	if err != nil {
+		t.Fatalf("failed to insert message: %v", err)
+	}
+
+	// Login Charlie.
+	loginBody := fmt.Sprintf(`{"username":"%s"}`, charlie)
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(loginBody),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusOK &&
+		loginRecorder.Code != http.StatusCreated {
+		t.Fatalf("login failed: got status %d", loginRecorder.Code)
+	}
+
+	cookies := loginRecorder.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("login did not return a session cookie")
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("/api/conversations/%d/messages", conversationID),
+		nil,
+	)
+	req.SetPathValue("convoID", fmt.Sprintf("%d", conversationID))
+	req.AddCookie(cookies[0])
+
+	recorder := httptest.NewRecorder()
+	handlers.GetMessages(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf(
+			"expected 403 for non-member, got %d: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+
+	t.Logf(
+		"IT-API-047 PASS: non-member was denied access to conversation %d messages",
+		conversationID,
+	)
+}
+
+
+func TestIT_API_048_EmptyConversationReturnsEmptyArray(t *testing.T) {
+	db := testutil.SetupDatabase(t)
+
+	alice := fmt.Sprintf("test_IT-API-048_alice_%d", time.Now().UnixNano())
+	bob := fmt.Sprintf("test_IT-API-048_bob_%d", time.Now().UnixNano())
+
+	if err := models.CreateUser(alice); err != nil {
+		t.Fatalf("failed to create Alice: %v", err)
+	}
+
+	if err := models.CreateUser(bob); err != nil {
+		t.Fatalf("failed to create Bob: %v", err)
+	}
+
+	var aliceID, bobID int
+
+	if err := db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		alice,
+	).Scan(&aliceID); err != nil {
+		t.Fatalf("failed to get Alice ID: %v", err)
+	}
+
+	if err := db.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		bob,
+	).Scan(&bobID); err != nil {
+		t.Fatalf("failed to get Bob ID: %v", err)
+	}
+
+	result, err := db.Exec(`
+		INSERT INTO conversations(name, conversation_type)
+		VALUES (?, 'direct')
+	`, bob)
+	if err != nil {
+		t.Fatalf("failed to create conversation: %v", err)
+	}
+
+	conversationID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get conversation ID: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO user_in_conversation(user_id, conversation_id)
+		VALUES (?, ?), (?, ?)
+	`, aliceID, conversationID, bobID, conversationID)
+	if err != nil {
+		t.Fatalf("failed to add members: %v", err)
+	}
+
+	// Deliberately do not insert any messages.
+
+	loginBody := fmt.Sprintf(`{"username":"%s"}`, alice)
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(loginBody),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginRecorder := httptest.NewRecorder()
+	handlers.LoginHandler(loginRecorder, loginReq)
+
+	if loginRecorder.Code != http.StatusOK &&
+		loginRecorder.Code != http.StatusCreated {
+		t.Fatalf("login failed: got status %d", loginRecorder.Code)
+	}
+
+	cookies := loginRecorder.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("login did not return a session cookie")
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("/api/conversations/%d/messages", conversationID),
+		nil,
+	)
+	req.SetPathValue("convoID", fmt.Sprintf("%d", conversationID))
+	req.AddCookie(cookies[0])
+
+	recorder := httptest.NewRecorder()
+	handlers.GetMessages(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf(
+			"expected 200, got %d: %s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+
+	var messages []struct {
+		ID int `json:"ID"`
+	}
+
+	if err := json.NewDecoder(recorder.Body).Decode(&messages); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if messages == nil {
+		t.Fatal("expected an empty JSON array, got null")
+	}
+
+	if len(messages) != 0 {
+		t.Fatalf("expected 0 messages, got %d", len(messages))
+	}
+
+	t.Logf(
+		"IT-API-048 PASS: empty conversation %d returned an empty array",
+		conversationID,
+	)
+}

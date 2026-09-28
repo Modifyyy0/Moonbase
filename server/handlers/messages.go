@@ -99,7 +99,7 @@ func GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var messages []models.Message
+	messages := make([]models.Message, 0)
 
 	messages, err = models.FindMessagesByConversationID(convoID)
 

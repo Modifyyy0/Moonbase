@@ -90,7 +90,7 @@ func FindMessagesByConversationID(conversationID int) ([]Message, error) {
 	}
 	defer rows.Close()
 
-	var messages []Message
+	messages := make([]Message, 0)
 
 	for rows.Next() {
 		var message Message
