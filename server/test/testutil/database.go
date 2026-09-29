@@ -74,40 +74,6 @@ func DeleteUsersByUsername(t *testing.T, database *sql.DB, usernames ...string) 
 	}
 }
 
-func DeleteConversation(t *testing.T, database *sql.DB, conversationID int) {
-	t.Helper()
-
-	_, err := database.Exec(
-		"DELETE FROM conversations WHERE id = ?",
-		conversationID,
-	)
-
-	if err != nil {
-		t.Errorf(
-			"failed to clean up test conversation %d: %v",
-			conversationID,
-			err,
-		)
-	}
-}
-
-func DeleteConversationByID(t *testing.T, database *sql.DB, conversationID int64) {
-	t.Helper()
-
-	_, err := database.Exec(
-		"DELETE FROM conversations WHERE id = ?",
-		conversationID,
-	)
-
-	if err != nil {
-		t.Errorf(
-			"failed to clean up conversation %d: %v",
-			conversationID,
-			err,
-		)
-	}
-}
-
 func DeleteConversationsByID(t *testing.T, database *sql.DB, conversationIDs ...int64) {
 	t.Helper()
 

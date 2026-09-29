@@ -4216,6 +4216,9 @@ func TestIT_API_035_GetConversationsResponseStructure(t *testing.T) {
 
 	// Create a unique user
 	username := fmt.Sprintf("test_IT-API-035_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, username)
+	})
 
 	_, err := db.Exec(
 		"INSERT INTO users (username) VALUES (?)",
@@ -4239,6 +4242,9 @@ func TestIT_API_035_GetConversationsResponseStructure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db, conversationID)
+	})
 
 	// Add user to conversation
 	_, err = db.Exec(
@@ -4374,6 +4380,9 @@ func TestIT_API_036_GetConversationsWithNoConversations(t *testing.T) {
 		"test_IT-API-036_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, username)
+	})
 
 	_, err := db.Exec(
 		"INSERT INTO users (username) VALUES (?)",
@@ -4483,6 +4492,9 @@ func TestIT_API_037_CreateDirectConversationWithSelf(t *testing.T) {
 		"test_IT-API-037_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, username)
+	})
 
 	// Create user.
 	_, err := db.Exec(
@@ -4607,6 +4619,9 @@ func TestIT_API_038_DuplicateDirectConversation(t *testing.T) {
 		"test_IT-API-038_Bob_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, alice, bob)
+	})
 
 	// Create Alice and Bob.
 	_, err := db.Exec(
@@ -4651,6 +4666,9 @@ func TestIT_API_038_DuplicateDirectConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get original conversation ID: %v", err)
 	}
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db, originalConversationID)
+	})
 
 	// Add Alice and Bob to the conversation.
 	_, err = db.Exec(
@@ -4806,6 +4824,9 @@ func TestIT_API_039_DirectConversationIsSymmetric(t *testing.T) {
 
 	alice := fmt.Sprintf("test_IT-API-039_Alice_%d", time.Now().UnixNano())
 	bob := fmt.Sprintf("test_IT-API-039_Bob_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, alice, bob)
+	})
 
 	// Create users.
 	_, err := db.Exec(
@@ -4889,6 +4910,9 @@ func TestIT_API_039_DirectConversationIsSymmetric(t *testing.T) {
 	}
 
 	originalID := created.Conversation.ID
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db, int64(originalID))
+	})
 
 	// Login as Bob.
 	bobLoginBody := strings.NewReader(
@@ -5013,6 +5037,14 @@ func TestIT_API_040_DuplicateGroupConversationAllowed(t *testing.T) {
 	alice := fmt.Sprintf("test_IT-API-040_Alice_%d", time.Now().UnixNano())
 	bob := fmt.Sprintf("test_IT-API-040_Bob_%d", time.Now().UnixNano())
 	charlie := fmt.Sprintf("test_IT-API-040_Charlie_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, alice, bob, charlie)
+	})
+
+	var conversationIDs []int64
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db, conversationIDs...)
+	})
 
 	_, err := db.Exec(
 		"INSERT INTO users (username) VALUES (?), (?), (?)",
@@ -5089,6 +5121,7 @@ func TestIT_API_040_DuplicateGroupConversationAllowed(t *testing.T) {
 	if err := json.NewDecoder(recorder1.Body).Decode(&first); err != nil {
 		t.Fatalf("failed to decode first response: %v", err)
 	}
+	conversationIDs = append(conversationIDs, int64(first.Conversation.ID))
 
 	// Second identical group.
 	req2 := httptest.NewRequest(
@@ -5119,6 +5152,7 @@ func TestIT_API_040_DuplicateGroupConversationAllowed(t *testing.T) {
 	if err := json.NewDecoder(recorder2.Body).Decode(&second); err != nil {
 		t.Fatalf("failed to decode second response: %v", err)
 	}
+	conversationIDs = append(conversationIDs, int64(second.Conversation.ID))
 
 	if first.Conversation.ID == second.Conversation.ID {
 		t.Fatalf(
@@ -5158,6 +5192,9 @@ func TestIT_API_041_GroupConversationRequiresName(t *testing.T) {
 	alice := fmt.Sprintf("test_IT-API-041_Alice_%d", time.Now().UnixNano())
 	bob := fmt.Sprintf("test_IT-API-041_Bob_%d", time.Now().UnixNano())
 	charlie := fmt.Sprintf("test_IT-API-041_Charlie_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, alice, bob, charlie)
+	})
 
 	_, err := db.Exec(
 		"INSERT INTO users (username) VALUES (?), (?), (?)",
@@ -5262,6 +5299,9 @@ func TestIT_API_042_DirectConversationRejectsMultipleMembers(t *testing.T) {
 	alice := fmt.Sprintf("test_IT-API-042_Alice_%d", time.Now().UnixNano())
 	bob := fmt.Sprintf("test_IT-API-042_Bob_%d", time.Now().UnixNano())
 	charlie := fmt.Sprintf("test_IT-API-042_Charlie_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, alice, bob, charlie)
+	})
 
 	_, err := db.Exec(
 		"INSERT INTO users (username) VALUES (?), (?), (?)",
@@ -5360,6 +5400,9 @@ func TestIT_API_043_InvalidConversationType(t *testing.T) {
 	alice := fmt.Sprintf("test_IT-API-043_Alice_%d", time.Now().UnixNano())
 	bob := fmt.Sprintf("test_IT-API-043_Bob_%d", time.Now().UnixNano())
 	charlie := fmt.Sprintf("test_IT-API-043_Charlie_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, alice, bob, charlie)
+	})
 
 	_, err := db.Exec(
 		"INSERT INTO users (username) VALUES (?), (?), (?)",
@@ -5456,6 +5499,9 @@ func TestIT_API_044_GetMultipleMessages(t *testing.T) {
 
 	alice := fmt.Sprintf("test_IT-API-044_%d", time.Now().UnixNano())
 	bob := fmt.Sprintf("test_IT-API-044_bob_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, alice, bob)
+	})
 
 	if err := models.CreateUser(alice); err != nil {
 		t.Fatalf("failed to create Alice: %v", err)
@@ -5491,6 +5537,9 @@ func TestIT_API_044_GetMultipleMessages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db, conversationID)
+	})
 
 	_, err = db.Exec(`
 		INSERT INTO user_in_conversation(user_id, conversation_id)
@@ -5588,6 +5637,9 @@ func TestIT_API_045_MessagesReturnedInOrder(t *testing.T) {
 
 	alice := fmt.Sprintf("test_IT-API-045_%d", time.Now().UnixNano())
 	bob := fmt.Sprintf("test_IT-API-045_bob_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, alice, bob)
+	})
 
 	if err := models.CreateUser(alice); err != nil {
 		t.Fatalf("failed to create Alice: %v", err)
@@ -5624,6 +5676,9 @@ func TestIT_API_045_MessagesReturnedInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db, conversationID)
+	})
 
 	_, err = db.Exec(`
 		INSERT INTO user_in_conversation(user_id, conversation_id)
@@ -5729,6 +5784,9 @@ func TestIT_API_046_MessageFieldsAreCorrect(t *testing.T) {
 
 	alice := fmt.Sprintf("test_IT-API-046_%d", time.Now().UnixNano())
 	bob := fmt.Sprintf("test_IT-API-046_bob_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, alice, bob)
+	})
 
 	if err := models.CreateUser(alice); err != nil {
 		t.Fatalf("failed to create Alice: %v", err)
@@ -5765,6 +5823,9 @@ func TestIT_API_046_MessageFieldsAreCorrect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db, conversationID)
+	})
 
 	_, err = db.Exec(`
 		INSERT INTO user_in_conversation(user_id, conversation_id)
@@ -5905,6 +5966,9 @@ func TestIT_API_047_NonMemberCannotGetMessages(t *testing.T) {
 	alice := fmt.Sprintf("test_IT-API-047_alice_%d", time.Now().UnixNano())
 	bob := fmt.Sprintf("test_IT-API-047_bob_%d", time.Now().UnixNano())
 	charlie := fmt.Sprintf("test_IT-API-047_charlie_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, alice, bob, charlie)
+	})
 
 	for _, username := range []string{alice, bob, charlie} {
 		if err := models.CreateUser(username); err != nil {
@@ -5947,6 +6011,9 @@ func TestIT_API_047_NonMemberCannotGetMessages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db, conversationID)
+	})
 
 	// Alice and Bob are members. Charlie is intentionally not.
 	_, err = db.Exec(`
@@ -6017,6 +6084,9 @@ func TestIT_API_048_EmptyConversationReturnsEmptyArray(t *testing.T) {
 
 	alice := fmt.Sprintf("test_IT-API-048_alice_%d", time.Now().UnixNano())
 	bob := fmt.Sprintf("test_IT-API-048_bob_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db, alice, bob)
+	})
 
 	if err := models.CreateUser(alice); err != nil {
 		t.Fatalf("failed to create Alice: %v", err)
@@ -6054,6 +6124,9 @@ func TestIT_API_048_EmptyConversationReturnsEmptyArray(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db, conversationID)
+	})
 
 	_, err = db.Exec(`
 		INSERT INTO user_in_conversation(user_id, conversation_id)

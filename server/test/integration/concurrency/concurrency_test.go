@@ -8,8 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time" 
-
+	"time"
 
 	"Moonbase/handlers"
 	"Moonbase/src/db"
@@ -219,6 +218,9 @@ func TestIT_CON_001_MultiConnection(t *testing.T) {
 		fmt.Sprintf("test_CON-001_C_%d", timestamp),
 		fmt.Sprintf("test_CON-001_D_%d", timestamp),
 	}
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db.DB, usernames...)
+	})
 
 	userIDs := make([]int, 0, len(usernames))
 
@@ -230,6 +232,9 @@ func TestIT_CON_001_MultiConnection(t *testing.T) {
 	}
 
 	conversationID := createGroupConversation(t, userIDs)
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db.DB, int64(conversationID))
+	})
 
 	_ = conversationID
 
@@ -407,6 +412,9 @@ func TestIT_CON_002_ConcurrentMessages(t *testing.T) {
 			userIDs := make([]int, 0, clientCount)
 			usernames := make([]string, 0, clientCount)
 			sessionTokens := make([]string, 0, clientCount)
+			t.Cleanup(func() {
+				testutil.DeleteUsersByUsername(t, db.DB, usernames...)
+			})
 
 			for i := 0; i < clientCount; i++ {
 				username := fmt.Sprintf(
@@ -425,6 +433,9 @@ func TestIT_CON_002_ConcurrentMessages(t *testing.T) {
 				t,
 				userIDs,
 			)
+			t.Cleanup(func() {
+				testutil.DeleteConversationsByID(t, db.DB, int64(conversationID))
+			})
 
 			for _, username := range usernames {
 				sessionTokens = append(

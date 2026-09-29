@@ -165,6 +165,9 @@ func TestIT_CON_004_DatabaseConcurrency(t *testing.T) {
 		"test_CON-004_%d",
 		timestamp,
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db.DB, username)
+	})
 
 	// ---------------------------------------------------------
 	// Create test user
@@ -205,6 +208,9 @@ func TestIT_CON_004_DatabaseConcurrency(t *testing.T) {
 	}
 
 	conversationID := int(conversationID64)
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db.DB, int64(conversationID))
+	})
 
 	// Add user to conversation.
 	_, err = db.DB.Exec(
@@ -512,6 +518,9 @@ func testConcurrentDuplicateUsernames(t *testing.T) {
 		"test_CON-006_duplicate_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db.DB, username)
+	})
 
 	const attempts = 100
 
@@ -603,6 +612,9 @@ func testConcurrentMessagesSameConversation(t *testing.T) {
 		fmt.Sprintf("test_CON-006_B_%d", timestamp),
 		fmt.Sprintf("test_CON-006_C_%d", timestamp),
 	}
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db.DB, usernames...)
+	})
 
 	userIDs := make([]int, 0, len(usernames))
 
@@ -646,6 +658,9 @@ func testConcurrentMessagesSameConversation(t *testing.T) {
 	}
 
 	conversationID := int(conversationID64)
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db.DB, int64(conversationID))
+	})
 
 	// Add users.
 	for _, userID := range userIDs {
@@ -757,6 +772,9 @@ func testConcurrentMembershipInsert(t *testing.T) {
 		"test_CON-006_membership_%d",
 		timestamp,
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db.DB, username)
+	})
 
 	result, err := db.DB.Exec(
 		"INSERT INTO users (username) VALUES (?)",
@@ -795,6 +813,9 @@ func testConcurrentMembershipInsert(t *testing.T) {
 	}
 
 	conversationID := int(conversationID64)
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db.DB, int64(conversationID))
+	})
 
 	const attempts = 50
 

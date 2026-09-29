@@ -3,18 +3,18 @@ package concurrency_test
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
 	"sync"
 	"testing"
 	"time"
-	"io"
 
 	"Moonbase/handlers"
 	"Moonbase/src/db"
-	"Moonbase/test/testutil"
 	"Moonbase/src/models"
+	"Moonbase/test/testutil"
 
 	gorilla "github.com/gorilla/websocket"
 )
@@ -37,6 +37,14 @@ func TestIT_FAIL_001_ConnectionFailure(t *testing.T) {
 		"test_FAIL-001_B_%d",
 		timestamp,
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(
+			t,
+			db.DB,
+			aliceUsername,
+			bobUsername,
+		)
+	})
 
 	aliceID := createTestUser(t, aliceUsername)
 	bobID := createTestUser(t, bobUsername)
@@ -45,6 +53,9 @@ func TestIT_FAIL_001_ConnectionFailure(t *testing.T) {
 		t,
 		[]int{aliceID, bobID},
 	)
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db.DB, int64(conversationID))
+	})
 
 	// ---------------------------------------------------------
 	// Login server
@@ -253,6 +264,15 @@ func TestIT_FAIL_002_SlowClient(t *testing.T) {
 		"test_FAIL-002_C_%d",
 		timestamp,
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(
+			t,
+			db.DB,
+			aliceUsername,
+			bobUsername,
+			charlieUsername,
+		)
+	})
 
 	aliceID := createTestUser(t, aliceUsername)
 	bobID := createTestUser(t, bobUsername)
@@ -262,6 +282,9 @@ func TestIT_FAIL_002_SlowClient(t *testing.T) {
 		t,
 		[]int{aliceID, bobID, charlieID},
 	)
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db.DB, int64(conversationID))
+	})
 
 	// ---------------------------------------------------------
 	// Login
@@ -543,7 +566,6 @@ func TestIT_FAIL_002_SlowClient(t *testing.T) {
 		"IT-FAIL-002 PASS: Bob remained a slow/non-reading client while Alice and Charlie continued communicating",
 	)
 
-	_ = bobID
 }
 
 func TestIT_FAIL_003_GoroutineLeak(t *testing.T) {
@@ -551,8 +573,11 @@ func TestIT_FAIL_003_GoroutineLeak(t *testing.T) {
 
 	timestamp := time.Now().UnixNano()
 
-	userIDs := make([]int, 0, 20)
+	usernames := make([]string, 0, 20)
 	tokens := make([]string, 0, 20)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db.DB, usernames...)
+	})
 
 	loginServer := httptest.NewServer(
 		http.HandlerFunc(handlers.LoginHandler),
@@ -574,8 +599,9 @@ func TestIT_FAIL_003_GoroutineLeak(t *testing.T) {
 			timestamp,
 			i,
 		)
+		usernames = append(usernames, username)
 
-		userID := createTestUser(t, username)
+		createTestUser(t, username)
 
 		token := loginTestUser(
 			t,
@@ -583,7 +609,6 @@ func TestIT_FAIL_003_GoroutineLeak(t *testing.T) {
 			username,
 		)
 
-		userIDs = append(userIDs, userID)
 		tokens = append(tokens, token)
 	}
 
@@ -676,7 +701,6 @@ func TestIT_FAIL_003_GoroutineLeak(t *testing.T) {
 		"IT-FAIL-003 PASS: goroutine count returned close to baseline after connection cleanup",
 	)
 
-	_ = userIDs
 }
 
 func TestIT_FAIL_004_Stress(t *testing.T) {
@@ -704,6 +728,10 @@ func TestIT_FAIL_004_Stress(t *testing.T) {
 
 	userIDs := make([]int, clientCount)
 	tokens := make([]string, clientCount)
+	usernames := make([]string, 0, clientCount)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, db.DB, usernames...)
+	})
 
 	for i := 0; i < clientCount; i++ {
 		username := fmt.Sprintf(
@@ -711,6 +739,7 @@ func TestIT_FAIL_004_Stress(t *testing.T) {
 			timestamp,
 			i,
 		)
+		usernames = append(usernames, username)
 
 		userIDs[i] = createTestUser(
 			t,
@@ -740,6 +769,14 @@ func TestIT_FAIL_004_Stress(t *testing.T) {
 			t,
 			userIDs[start:end],
 		)
+		conversationID := conversationIDs[i]
+		t.Cleanup(func() {
+			testutil.DeleteConversationsByID(
+				t,
+				db.DB,
+				int64(conversationID),
+			)
+		})
 	}
 
 	// ---------------------------------------------------------
@@ -980,6 +1017,14 @@ func TestIT_FAIL_005_EndToEnd(t *testing.T) {
 
 	aliceUsername := fmt.Sprintf("test_FAIL-005_alice_%d", time.Now().UnixNano())
 	bobUsername := fmt.Sprintf("test_FAIL-005_bob_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(
+			t,
+			db.DB,
+			aliceUsername,
+			bobUsername,
+		)
+	})
 
 	aliceID := createTestUser(t, aliceUsername)
 	bobID := createTestUser(t, bobUsername)
@@ -1033,6 +1078,9 @@ func TestIT_FAIL_005_EndToEnd(t *testing.T) {
 		t,
 		[]int{aliceID, bobID},
 	)
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, db.DB, int64(conversationID))
+	})
 
 	t.Logf(
 		"IT-FAIL-005: conversation %d created",
@@ -1129,7 +1177,7 @@ func TestIT_FAIL_005_EndToEnd(t *testing.T) {
 	}
 
 	type receivedMessage struct {
-		Type string               `json:"type"`
+		Type string              `json:"type"`
 		Data receivedMessageData `json:"data"`
 	}
 
