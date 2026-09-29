@@ -33,14 +33,14 @@ func getUserConversation(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session_token")
 
 	if err != nil {
-		http.Error(w, "Unauthorzed bitrh, get away from my screen", http.StatusInternalServerError)
+		http.Error(w, "Unauthorzed bitrh, get away from my screen", http.StatusUnauthorized)
 		return
 	}
 
 	err = db.QueryRow(`SELECT users.id FROM sessions JOIN users ON users.username = sessions.username WHERE sessions.session_token = ?`, cookie.Value).Scan(&userID)
 
 	if err != nil {
-		http.Error(w, "the user id was not obtained from the cookies in the db", http.StatusInternalServerError)
+		http.Error(w, "the user id was not obtained from the cookies in the db", http.StatusUnauthorized)
 		return
 	}
 
@@ -177,15 +177,15 @@ func CreateConversation(w http.ResponseWriter, r *http.Request) {
 		var existingID int
 		var existingName string
 		err = tx.QueryRow(`
-			SELECT c.id, c.name
-			FROM conversations AS c
-			JOIN user_in_conversation AS members ON members.conversation_id = c.id
-			WHERE c.conversation_type = 'direct'
-			  AND members.user_id IN (?, ?)
-			GROUP BY c.id, c.name
-			HAVING COUNT(DISTINCT members.user_id) = 2
-			   AND (SELECT COUNT(*) FROM user_in_conversation WHERE conversation_id = c.id) = 2
-		`, currentUserID, memberIDs[0]).Scan(&existingID, &existingName)
+    SELECT c.id, COALESCE(c.name, '')
+    FROM conversations AS c
+    JOIN user_in_conversation AS members ON members.conversation_id = c.id
+    WHERE c.conversation_type = 'direct'
+      AND members.user_id IN (?, ?)
+    GROUP BY c.id, c.name
+    HAVING COUNT(DISTINCT members.user_id) = 2
+       AND (SELECT COUNT(*) FROM user_in_conversation WHERE conversation_id = c.id) = 2
+`, currentUserID, memberIDs[0]).Scan(&existingID, &existingName)
 		if err == nil {
 			if err := tx.Commit(); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -276,40 +276,84 @@ func writeConversationCreated(w http.ResponseWriter, status int, id int64, name,
 
 func JoinConvo(w http.ResponseWriter, r *http.Request) {
 
-	var userId int
+	var userID int
 
 	convoID, err := strconv.Atoi(r.PathValue("convoID"))
-
 	if err != nil {
-		http.Error(w, "Invalid convID", http.StatusInternalServerError)
+		http.Error(w, "Invalid convID", http.StatusBadRequest)
 		return
 	}
+
+	// Get the session cookie.
 	cookie, err := r.Cookie("session_token")
-
-	err = db.QueryRow(`SELECT users.id FROM sessions JOIN users ON users.username = sessions.username WHERE sessions.session_token = ?`, cookie.Value).Scan(&userId)
-
 	if err != nil {
-		http.Error(w, "the user id was not obtained from the cookies in the db", http.StatusInternalServerError)
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
 	}
 
-	_, err = db.Exec("INSERT into user_in_conversation (user_id, conversation_id) VALUES (?, ?)", userId, convoID)
+	// Get the current user's ID from the session.
+	err = db.QueryRow(`
+		SELECT users.id
+		FROM sessions
+		JOIN users
+			ON users.username = sessions.username
+		WHERE sessions.session_token = ?
+	`, cookie.Value).Scan(&userID)
 
 	if err != nil {
-		http.Error(w, "The user is already in the conversation", http.StatusInternalServerError)
+		http.Error(
+			w,
+			"the user id was not obtained from the cookies in the db",
+			http.StatusUnauthorized,
+		)
 		return
 	}
 
+	// Make sure the conversation exists BEFORE trying to add the user.
 	var conversation models.Conversation
 
-	err = db.QueryRow(`SELECT id, name, conversation_type FROM conversations WHERE id = ?`, convoID).Scan(&conversation.ID, &conversation.Name, &conversation.ConversationType)
+	err = db.QueryRow(`
+		SELECT id, name, conversation_type
+		FROM conversations
+		WHERE id = ?
+	`, convoID).Scan(
+		&conversation.ID,
+		&conversation.Name,
+		&conversation.ConversationType,
+	)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "Conversation not found", http.StatusNotFound)
+		return
+	}
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(
+			w,
+			"Could not obtain conversation",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	// Add the user to the conversation.
+	_, err = db.Exec(`
+		INSERT INTO user_in_conversation
+			(user_id, conversation_id)
+		VALUES (?, ?)
+	`, userID, convoID)
+
+	if err != nil {
+		http.Error(
+			w,
+			"The user is already in the conversation",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"conversation": map[string]interface{}{
 			"id":   conversation.ID,
@@ -317,7 +361,6 @@ func JoinConvo(w http.ResponseWriter, r *http.Request) {
 			"type": conversation.ConversationType,
 		},
 	})
-
 }
 
 func ConvoInfo(w http.ResponseWriter, r *http.Request) {
@@ -419,10 +462,30 @@ func LeaveConvo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(`DELETE FROM user_in_conversation WHERE conversation_id = ? AND user_id = ?`, convoId, userId)
+	result, err := db.Exec(
+		`DELETE FROM user_in_conversation
+	 WHERE conversation_id = ? AND user_id = ?`,
+		convoId,
+		userId,
+	)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if rowsAffected == 0 {
+		http.Error(
+			w,
+			"User is not a member of the conversation",
+			http.StatusBadRequest,
+		)
 		return
 	}
 

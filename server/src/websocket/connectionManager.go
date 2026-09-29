@@ -68,6 +68,15 @@ type PresenceData struct {
 	Username       string `json:"username"`
 }
 
+type NewMessageData struct {
+	MessageID       int       `json:"id"`
+	ConversationID  int       `json:"conversation_id"`
+	SenderID        int       `json:"sender_id"`
+	SenderUsername  string    `json:"sender_username"`
+	Content         string    `json:"content"`
+	SentTime        time.Time `json:"sent_time"`
+}
+
 func NewConnectionManager() *ConnectionManager {
 	return &ConnectionManager{
 		clients: make(map[int]*Client),
@@ -118,44 +127,33 @@ func WritePump(client *Client) {
 				return
 			}
 
-			fmt.Println("WritePump received event:", message.Type)
-
 			switch message.Type {
 
 			case NewMessage:
 
-				newMessageData, ok := message.Data.(*models.Message)
+				newMessageData, ok := message.Data.(NewMessageData)
 				if !ok {
 					log.Println("invalid data for NewMessage")
 					continue
 				}
 
-				var newMessage struct {
-					Type string `json:"type"`
-					Data struct {
-						ID             int       `json:"id"`
-						ConversationID int       `json:"conversation_id"`
-						SenderID       int       `json:"sender_id"`
-						SenderUsername string    `json:"sender_username"`
-						Content        string    `json:"content"`
-						SentTime       time.Time `json:"sent_time"`
-					} `json:"data"`
+				newMessage := struct {
+					Type string         `json:"type"`
+					Data NewMessageData `json:"data"`
+				}{
+					Type: "new_message",
+					Data: newMessageData,
 				}
 
-				// Another wasted lookup for now.
-				user, err := models.FindUserById(newMessageData.UserID)
-				if err != nil {
-					log.Println("FindUserById error:", err)
+				if err := client.Conn.WriteJSON(newMessage); err != nil {
+					log.Println("WriteJSON error:", err)
 					return
 				}
-
-				newMessage.Type = "new_message"
-				newMessage.Data.ID = newMessageData.ID
-				newMessage.Data.ConversationID = newMessageData.ConversationID
-				newMessage.Data.SenderID = newMessageData.UserID
-				newMessage.Data.SenderUsername = user.Name
-				newMessage.Data.Content = newMessageData.Content
-				newMessage.Data.SentTime = newMessageData.SentAt
+				// newMessage.Data.ConversationID = newMessageData.ConversationID
+				// newMessage.Data.SenderID = newMessageData.UserID
+				// newMessage.Data.SenderUsername = user.Name
+				// newMessage.Data.Content = newMessageData.Content
+				// newMessage.Data.SentTime = newMessageData.SentAt
 
 				if err := client.Conn.WriteJSON(newMessage); err != nil {
 					log.Println("WriteJSON error:", err)
@@ -284,6 +282,10 @@ func ProcessMessage(client *Client, message IncomingMessage, manager *Connection
 			message.Data.ConversationID,
 			message.Data.Content,
 		)
+		sender, err := models.FindUserById(client.UserID)
+		if err != nil {
+			return err
+		}
 		if err != nil {
 			log.Println("ProcessMessage error:", err)
 			return err
@@ -309,24 +311,24 @@ func ProcessMessage(client *Client, message IncomingMessage, manager *Connection
 
 			outgoingMessage := OutgoingMessage{
 				Type: NewMessage,
-				Data: newMessage,
+				Data: NewMessageData{
+					MessageID:      newMessage.ID,
+					ConversationID: newMessage.ConversationID,
+					SenderID:       newMessage.UserID,
+					SenderUsername: sender.Name,
+					Content:        newMessage.Content,
+					SentTime:       newMessage.SentAt,
+				},
 			}
 
-			fmt.Println(
-				"Sending MSG",
-			)
+			queued := QueueMessage(targetClient, outgoingMessage)
 
-			select {
-			case targetClient.Message <- outgoingMessage:
-			case <-targetClient.Done:
-				continue
-			}
-
-			if user.ID != client.UserID {
+			if user.ID != client.UserID && queued {
 				receipt, err := models.MarkMessageDelivered(newMessage.ID, user.ID)
 				if err != nil {
 					return err
 				}
+
 				sendReceiptToUser(manager, newMessage.UserID, receipt)
 			}
 		}
@@ -361,7 +363,13 @@ func ProcessMessage(client *Client, message IncomingMessage, manager *Connection
 				continue
 			}
 			if target, ok := manager.GetClient(member.ID); ok {
-				target.Message <- OutgoingMessage{Type: Typing, Data: data}
+				QueueMessage(
+					target,
+					OutgoingMessage{
+						Type: Typing,
+						Data: data,
+					},
+				)
 			}
 		}
 	}
@@ -373,11 +381,20 @@ func sendReceiptToUser(manager *ConnectionManager, userID int, receipt *models.R
 	if receipt == nil {
 		return
 	}
+
 	if target, ok := manager.GetClient(userID); ok {
-		target.Message <- OutgoingMessage{Type: MessageReceipt, Data: ReceiptData{
-			MessageID: receipt.MessageID, ConversationID: receipt.ConversationID,
-			UserID: receipt.UserID, Status: receipt.Status,
-		}}
+		QueueMessage(
+			target,
+			OutgoingMessage{
+				Type: MessageReceipt,
+				Data: ReceiptData{
+					MessageID:      receipt.MessageID,
+					ConversationID: receipt.ConversationID,
+					UserID:         receipt.UserID,
+					Status:         receipt.Status,
+				},
+			},
+		)
 	}
 }
 
@@ -432,11 +449,7 @@ func SendUserOnline(client *Client, manager *ConnectionManager, username string)
 				"for conversation:",
 				conversation.ID,
 			)
-			select {
-			case targetClient.Message <- outgoingMessage:
-			case <-targetClient.Done:
-				continue
-			}
+			QueueMessage(targetClient, outgoingMessage)
 		}
 	}
 }
@@ -479,11 +492,31 @@ func SendUserOffline(client *Client, manager *ConnectionManager) {
 			}
 
 			fmt.Print("User is offline")
-			select {
-			case targetClient.Message <- outgoingMessage:
-			case <-targetClient.Done:
-				continue
-			}
+			QueueMessage(targetClient, outgoingMessage)
 		}
+	}
+}
+
+func QueueMessage(client *Client, message OutgoingMessage) bool {
+	select {
+	case <-client.Done:
+		return false
+	default:
+	}
+
+	select {
+	case client.Message <- message:
+		return true
+
+	case <-client.Done:
+		return false
+
+	default:
+		log.Printf(
+			"outgoing queue full for user %d; dropping event type %d",
+			client.UserID,
+			message.Type,
+		)
+		return false
 	}
 }
