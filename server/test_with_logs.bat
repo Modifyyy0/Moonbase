@@ -1,0 +1,1 @@
+go test ./test/integration/... -v > test_results.txt 2>&1 

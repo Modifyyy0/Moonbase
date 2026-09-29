@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"Moonbase/src/db"
 )
@@ -51,22 +52,77 @@ func SetupDatabase(t *testing.T) *sql.DB {
 }
 
 func TestUsername(testID string) string {
-	return fmt.Sprintf("test_%s_%d", testID, os.Getpid())
+	return fmt.Sprintf("test_%s_%d", testID, time.Now().UnixNano())
 }
 
-func DeleteUserByUsername(t *testing.T, database *sql.DB, username string) {
+func DeleteUsersByUsername(t *testing.T, database *sql.DB, usernames ...string) {
+	t.Helper()
+
+	for _, username := range usernames {
+		_, err := database.Exec(
+			"DELETE FROM users WHERE username = ?",
+			username,
+		)
+
+		if err != nil {
+			t.Errorf(
+				"failed to clean up test user %q: %v",
+				username,
+				err,
+			)
+		}
+	}
+}
+
+func DeleteConversation(t *testing.T, database *sql.DB, conversationID int) {
 	t.Helper()
 
 	_, err := database.Exec(
-		"DELETE FROM users WHERE username = ?",
-		username,
+		"DELETE FROM conversations WHERE id = ?",
+		conversationID,
 	)
 
 	if err != nil {
-		t.Fatalf(
-			"failed to clean up test user %q: %v",
-			username,
+		t.Errorf(
+			"failed to clean up test conversation %d: %v",
+			conversationID,
 			err,
 		)
+	}
+}
+
+func DeleteConversationByID(t *testing.T, database *sql.DB, conversationID int64) {
+	t.Helper()
+
+	_, err := database.Exec(
+		"DELETE FROM conversations WHERE id = ?",
+		conversationID,
+	)
+
+	if err != nil {
+		t.Errorf(
+			"failed to clean up conversation %d: %v",
+			conversationID,
+			err,
+		)
+	}
+}
+
+func DeleteConversationsByID(t *testing.T, database *sql.DB, conversationIDs ...int64) {
+	t.Helper()
+
+	for _, conversationID := range conversationIDs {
+		_, err := database.Exec(
+			"DELETE FROM conversations WHERE id = ?",
+			conversationID,
+		)
+
+		if err != nil {
+			t.Errorf(
+				"failed to clean up conversation %d: %v",
+				conversationID,
+				err,
+			)
+		}
 	}
 }

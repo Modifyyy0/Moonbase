@@ -39,7 +39,7 @@ func Connect() error {
 	_ = godotenv.Load()
 
 	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?parseTime=true&tls=true",
+		"%s:%s@tcp(%s:%s)/%s?parseTime=true",
 		user,
 		password,
 		host,

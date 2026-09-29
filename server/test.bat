@@ -1,0 +1,1 @@
+go test ./test/integration/... -v 2>&1 | Select-String "^(=== RUN|--- PASS|--- FAIL|    .*PASS:|    .*FAIL:|PASS$|FAIL$|ok )" | Tee-Object test_summary.txt

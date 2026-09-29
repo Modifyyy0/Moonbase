@@ -14,11 +14,11 @@ func TestIT_DB_001_ValidUserCreation(t *testing.T) {
 	username := testutil.TestUsername("db001")
 
 	// Make sure the test starts clean.
-	testutil.DeleteUserByUsername(t, database, username)
+	testutil.DeleteUsersByUsername(t, database, username)
 
 	// Always clean up the test user after the test.
 	t.Cleanup(func() {
-		testutil.DeleteUserByUsername(t, database, username)
+		testutil.DeleteUsersByUsername(t, database, username)
 	})
 
 	// Execute the operation being tested.
@@ -82,8 +82,6 @@ func TestIT_DB_001_ValidUserCreation(t *testing.T) {
 		username,
 		id,
 	)
-
-	_ = sql.ErrNoRows
 }
 
 func TestIT_DB_002_DuplicateUsername(t *testing.T) {
@@ -92,11 +90,11 @@ func TestIT_DB_002_DuplicateUsername(t *testing.T) {
 	username := testutil.TestUsername("db002")
 
 	// Make sure the test starts clean.
-	testutil.DeleteUserByUsername(t, database, username)
+	testutil.DeleteUsersByUsername(t, database, username)
 
 	// Always clean up the test user after the test.
 	t.Cleanup(func() {
-		testutil.DeleteUserByUsername(t, database, username)
+		testutil.DeleteUsersByUsername(t, database, username)
 	})
 
 	// Create the user for the first time.
@@ -153,7 +151,7 @@ func TestIT_DB_003_InvalidUserLookup(t *testing.T) {
 	username := testutil.TestUsername("db003")
 
 	// Make sure this username does not exist.
-	testutil.DeleteUserByUsername(t, database, username)
+	testutil.DeleteUsersByUsername(t, database, username)
 
 	// Look up a user that does not exist.
 	user, err := models.FindUserByName(username)
@@ -178,3 +176,4 @@ func TestIT_DB_003_InvalidUserLookup(t *testing.T) {
 		username,
 	)
 }
+

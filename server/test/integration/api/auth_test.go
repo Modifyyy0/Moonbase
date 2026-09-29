@@ -1080,6 +1080,10 @@ func TestIT_API_014_GetUsers(t *testing.T) {
 		time.Now().UnixNano(),
 	)
 
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice, bob)
+	})
+
 	// Create Bob directly in the database.
 	result, err := database.Exec(
 		"INSERT INTO users (username) VALUES (?)",
@@ -1220,6 +1224,10 @@ func TestIT_API_015_SearchUsers(t *testing.T) {
 		time.Now().UnixNano(),
 	)
 
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice, bob, bobby)
+	})
+
 	// Create Bob and Bobby.
 	_, err := database.Exec(
 		"INSERT INTO users (username) VALUES (?), (?)",
@@ -1356,6 +1364,10 @@ func TestIT_API_016_CreateConversation(t *testing.T) {
 		time.Now().UnixNano(),
 	)
 
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice, bob, charlie)
+	})
+
 	// Create Bob and Charlie.
 	_, err := database.Exec(
 		"INSERT INTO users (username) VALUES (?), (?)",
@@ -1458,6 +1470,11 @@ func TestIT_API_016_CreateConversation(t *testing.T) {
 		)
 	}
 
+	conversationID := int64(response.Conversation.ID)
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, database, conversationID)
+	})
+
 	// Verify conversation exists in the database.
 	var name string
 	var conversationType string
@@ -1543,6 +1560,10 @@ func TestIT_API_017_GetConversationByID(t *testing.T) {
 		time.Now().UnixNano(),
 	)
 
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice, bob)
+	})
+
 	// Create test users.
 	result, err := database.Exec(
 		"INSERT INTO users (username) VALUES (?), (?)",
@@ -1582,6 +1603,10 @@ func TestIT_API_017_GetConversationByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, database, conversationID)
+	})
 
 	// Add Alice and Bob to the conversation.
 	_, err = database.Exec(
@@ -1795,6 +1820,15 @@ func TestIT_API_018_GetUserConversations(t *testing.T) {
 		time.Now().UnixNano(),
 	)
 
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice, bob, charlie)
+	})
+
+	var conversationIDs []int64
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, database, conversationIDs...)
+	})
+
 	// Create test users.
 	result, err := database.Exec(
 		"INSERT INTO users (username) VALUES (?), (?), (?)",
@@ -1844,6 +1878,7 @@ func TestIT_API_018_GetUserConversations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get Conversation A ID: %v", err)
 	}
+	conversationIDs = append(conversationIDs, conversationAID)
 
 	_, err = database.Exec(
 		`INSERT INTO user_in_conversation (user_id, conversation_id)
@@ -1872,6 +1907,7 @@ func TestIT_API_018_GetUserConversations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get Conversation B ID: %v", err)
 	}
+	conversationIDs = append(conversationIDs, conversationBID)
 
 	_, err = database.Exec(
 		`INSERT INTO user_in_conversation (user_id, conversation_id)
@@ -1901,6 +1937,7 @@ func TestIT_API_018_GetUserConversations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get Conversation C ID: %v", err)
 	}
+	conversationIDs = append(conversationIDs, conversationCID)
 
 	_, err = database.Exec(
 		`INSERT INTO user_in_conversation (user_id, conversation_id)
@@ -2093,6 +2130,10 @@ func TestIT_API_019_JoinConversation(t *testing.T) {
 		time.Now().UnixNano(),
 	)
 
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice, bob)
+	})
+
 	// Create test users.
 	result, err := database.Exec(
 		"INSERT INTO users (username) VALUES (?), (?)",
@@ -2132,6 +2173,10 @@ func TestIT_API_019_JoinConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, database, conversationID)
+	})
 
 	// Add Alice as the initial member.
 	_, err = database.Exec(
@@ -2300,6 +2345,10 @@ func TestIT_API_020_LeaveConversation(t *testing.T) {
 		time.Now().UnixNano(),
 	)
 
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice, bob)
+	})
+
 	// Create test users.
 	result, err := database.Exec(
 		"INSERT INTO users (username) VALUES (?), (?)",
@@ -2340,6 +2389,10 @@ func TestIT_API_020_LeaveConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, database, conversationID)
+	})
 
 	// Add Alice and Bob as members.
 	_, err = database.Exec(
@@ -2531,6 +2584,9 @@ func TestIT_API_021_JoinNonExistentConversation(t *testing.T) {
 		"test_IT-API-021_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, username)
+	})
 
 	// Create test user.
 	_, err := database.Exec(
@@ -2672,6 +2728,9 @@ func TestIT_API_022_LeaveConversationAsNonMember(t *testing.T) {
 		"test_IT-API-022_Bob_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice, bob)
+	})
 
 	// Create Alice and Bob.
 	_, err := database.Exec(
@@ -2717,6 +2776,9 @@ func TestIT_API_022_LeaveConversationAsNonMember(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, database, conversationID)
+	})
 
 	// Add ONLY Alice.
 	_, err = database.Exec(
@@ -2885,6 +2947,14 @@ func TestIT_API_023_GetConversationMessages(t *testing.T) {
 		"test_IT-API-023_Bob_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice, bob)
+	})
+
+	var conversationIDs []int64
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, database, conversationIDs...)
+	})
 
 	// Create users.
 	_, err := database.Exec(
@@ -2930,6 +3000,7 @@ func TestIT_API_023_GetConversationMessages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+	conversationIDs = append(conversationIDs, conversationID)
 
 	// Add Alice and Bob.
 	_, err = database.Exec(
@@ -2995,6 +3066,7 @@ func TestIT_API_023_GetConversationMessages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get unrelated conversation ID: %v", err)
 	}
+	conversationIDs = append(conversationIDs, unrelatedConversationID)
 
 	_, err = database.Exec(
 		`INSERT INTO messages
@@ -3200,6 +3272,9 @@ func TestIT_API_024_GetMessagesFromNonExistentConversation(t *testing.T) {
 		"test_IT-API-024_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, username)
+	})
 
 	// Create test user.
 	_, err := database.Exec(
@@ -3312,6 +3387,9 @@ func TestIT_API_025_GetMessagesWithoutAuthentication(t *testing.T) {
 		"test_IT-API-025_Bob_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice, bob)
+	})
 
 	// Create users.
 	aliceResult, err := database.Exec(
@@ -3356,6 +3434,9 @@ func TestIT_API_025_GetMessagesWithoutAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, database, conversationID64)
+	})
 	conversationID := int(conversationID64)
 
 	// Add both users to the conversation.
@@ -3416,6 +3497,9 @@ func TestIT_API_026_GetMessagesAsNonMember(t *testing.T) {
 		"test_IT-API-026_Bob_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice, bob)
+	})
 
 	// Create Alice.
 	aliceResult, err := database.Exec(
@@ -3461,6 +3545,9 @@ func TestIT_API_026_GetMessagesAsNonMember(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get conversation ID: %v", err)
 	}
+	t.Cleanup(func() {
+		testutil.DeleteConversationsByID(t, database, conversationID64)
+	})
 	conversationID := int(conversationID64)
 
 	// Only Bob is a member.
@@ -3557,6 +3644,9 @@ func TestIT_API_027_CreateGroupConversationWithoutMembers(t *testing.T) {
 		"test_IT-API-027_Alice_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, username)
+	})
 
 	// Create user.
 	_, err := database.Exec(
@@ -3677,6 +3767,9 @@ func TestIT_API_028_CreateDirectConversationWithNonExistentUser(t *testing.T) {
 		"test_IT-API-028_Alice_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, alice)
+	})
 
 	// Create Alice.
 	_, err := database.Exec(
@@ -3803,6 +3896,9 @@ func TestIT_API_029_CreateConversationInvalidJSON(t *testing.T) {
 		"test_IT-API-029_Alice_%d",
 		time.Now().UnixNano(),
 	)
+	t.Cleanup(func() {
+		testutil.DeleteUsersByUsername(t, database, username)
+	})
 
 	// Create user.
 	_, err := database.Exec(
@@ -4086,7 +4182,6 @@ func TestIT_API_033_GetConversationsWithoutAuthentication(t *testing.T) {
 }
 
 func TestIT_API_034_GetConversationsWithInvalidSession(t *testing.T) {
-
 
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -5488,7 +5583,6 @@ func TestIT_API_044_GetMultipleMessages(t *testing.T) {
 	)
 }
 
-
 func TestIT_API_045_MessagesReturnedInOrder(t *testing.T) {
 	db := testutil.SetupDatabase(t)
 
@@ -5629,7 +5723,6 @@ func TestIT_API_045_MessagesReturnedInOrder(t *testing.T) {
 		len(messages),
 	)
 }
-
 
 func TestIT_API_046_MessageFieldsAreCorrect(t *testing.T) {
 	db := testutil.SetupDatabase(t)
@@ -5806,7 +5899,6 @@ func TestIT_API_046_MessageFieldsAreCorrect(t *testing.T) {
 	)
 }
 
-
 func TestIT_API_047_NonMemberCannotGetMessages(t *testing.T) {
 	db := testutil.SetupDatabase(t)
 
@@ -5919,7 +6011,6 @@ func TestIT_API_047_NonMemberCannotGetMessages(t *testing.T) {
 		conversationID,
 	)
 }
-
 
 func TestIT_API_048_EmptyConversationReturnsEmptyArray(t *testing.T) {
 	db := testutil.SetupDatabase(t)
