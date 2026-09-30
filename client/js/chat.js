@@ -2,6 +2,8 @@ import { rest } from "./rest.js";
 import { ChatWebSocket } from "./ws.js";
 
 const elements = {
+    noConversation: document.getElementById("no-convo"),
+    conversationView: document.getElementById("conversation-view"),
     messageInput: document.getElementById("message-input"),
     convoContainer: document.getElementById("convo-container"),
     newConversationButton: document.getElementById("new-convo-button"),
@@ -32,13 +34,18 @@ const elements = {
 const ws = new ChatWebSocket();
 const state = {
     conversations: [],
-    activeConversationId: 19,
+    activeConversationId: null,
     currentConversation: null,
     inviteSelections: [],
     inviteUsers: [],
     currentUserId: 0,
     typingUsers: new Map(),
     typingTimer: null,
+};
+
+const setConversationView = (hasConversation) => {
+    elements.noConversation.hidden = hasConversation;
+    elements.conversationView.hidden = !hasConversation;
 };
 
 const setPopoutVisibility = (isOpen) => {
@@ -160,8 +167,7 @@ const renderConversations = (conversations = []) => {
 };
 
 const renderMemberList = (members = []) => {
-    const existingCards = elements.infoBarMembers.querySelectorAll(".info-bar-user");
-    existingCards.forEach((card) => card.remove());
+    elements.infoBarMembers.querySelectorAll(".info-bar-member-section").forEach((section) => section.remove());
 
     const onlineMembers = members.filter((member) => member.online);
     const offlineMembers = members.filter((member) => !member.online);
@@ -220,6 +226,7 @@ const populateConversationHeader = (conversation = {}) => {
     elements.convoHeadMembers.textContent = `${memberCount} members`;
     elements.convoHeadOnline.textContent = `${onlineCount} online`;
     elements.infoBarConvoName.textContent = title;
+    elements.messageInput.placeholder = `Message in "${title}", [Enter] to send`;
     renderMemberList(Array.isArray(conversation.members) ? conversation.members : []);
 };
 
@@ -255,15 +262,17 @@ const loadConversationMessages = async (conversationId) => {
 
 const selectConversation = async (conversationId) => {
     const validId = Number(conversationId);
-    state.activeConversationId = validId;
+    state.activeConversationId = validId || null;
     state.typingUsers.clear();
     renderTypingIndicator();
     if (!validId) {
-        renderConversations([])
-        populateConversationHeader({})
+        state.currentConversation = null;
+        elements.convoContainer.innerHTML = "";
+        setConversationView(false);
         return;
     }
 
+    setConversationView(true);
 
     try {
         const conversation = await rest.getConversation(validId);
@@ -284,7 +293,11 @@ const loadConversations = async () => {
         if (conversationList.length > 0) {
             const firstId = Number(conversationList[0].id ?? conversationList[0].ID ?? conversationList[0].conversation_id);
             selectConversation(firstId);
-
+        } else {
+            state.activeConversationId = null;
+            state.currentConversation = null;
+            elements.convoContainer.innerHTML = "";
+            setConversationView(false);
         }
     } catch (error) {
         console.error("Failed to load conversations:", error);
