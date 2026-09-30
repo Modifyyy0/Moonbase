@@ -24,11 +24,8 @@ func Exec(query string, args ...any) (sql.Result, error) {
 }
 
 func Connect() error {
-	err := godotenv.Load()
-	if err != nil {
-		fmt.Println("Env not loading")
-		return err
-	}
+	_ = godotenv.Load()
+	var err error
 
 	user := os.Getenv("DB_USER")
 	password := os.Getenv("DB_PASSWORD")
@@ -36,10 +33,8 @@ func Connect() error {
 	port := os.Getenv("DB_PORT")
 	dbName := os.Getenv("DB_NAME")
 
-	_ = godotenv.Load()
-
 	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?parseTime=true",
+		"%s:%s@tcp(%s:%s)/%s?parseTime=true&tls=true",
 		user,
 		password,
 		host,

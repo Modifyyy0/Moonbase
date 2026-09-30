@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	_ "github.com/go-sql-driver/mysql"
 
@@ -73,6 +74,11 @@ func main() {
 		clientFiles.ServeHTTP(w, r)
 	})
 
-	fmt.Println("Server running at http://localhost:6767")
-	log.Fatal(http.ListenAndServe(":6767", corsMiddleware(http.DefaultServeMux)))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "6767"
+	}
+
+	fmt.Printf("Server running on port %s\n", port)
+	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(http.DefaultServeMux)))
 }
